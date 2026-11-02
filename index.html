@@ -252,7 +252,7 @@ async function startCam(){
     stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}, width:{ideal:1280}, height:{ideal:1280}}, audio:false});
     const v = $("video"); v.srcObject = stream; await v.play();
     if ("BarcodeDetector" in window){ try{ detector = new BarcodeDetector({formats:["qr_code"]}); }catch(e){ detector = null; } }
-    scanning = true; $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요";
+    scanning = true; $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요" + (detector ? "" : (window.jsQR ? " (보조 읽기)" : " (읽기 부품을 불러오지 못했습니다 - 인터넷 확인)"));
     loop();
   }catch(e){
     scanning = false;
@@ -263,7 +263,7 @@ function stopCam(){
   scanning = false;
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
 }
-let lastT = -1, lastTAt = 0, restarting = false;
+let lastT = -1, lastTAt = 0, restarting = false, tries = 0;
 async function restartCam(){
   if (restarting) return; restarting = true;
   try{ stopCam(); await new Promise(r => setTimeout(r, 250)); await startCam(); }finally{ restarting = false; lastT = -1; lastTAt = Date.now(); }
@@ -288,9 +288,15 @@ async function loop(){
       if (detector){
         const r = await detector.detect(v); if (r.length) text = r[0].rawValue;
       } else if (window.jsQR){
-        const w = Math.min(v.videoWidth, 900), h = Math.round(v.videoHeight * w / v.videoWidth);
-        cv.width = w; cv.height = h; cx.drawImage(v, 0, 0, w, h);
-        const r = jsQR(cx.getImageData(0, 0, w, h).data, w, h, {inversionAttempts:"dontInvert"}); if (r) text = r.data;
+        // 아이폰처럼 기본 QR 읽기 기능이 없는 폰: 보조 읽기. 프레임마다 방식을 바꿔 가며 시도한다
+        tries++;
+        const vw = v.videoWidth, vh = v.videoHeight;
+        let sx = 0, sy = 0, sw = vw, sh = vh, out = Math.min(vw, 1280);
+        if (tries % 2 === 0){ sw = Math.round(vw * 0.62); sh = Math.round(vh * 0.62); sx = Math.round((vw - sw) / 2); sy = Math.round((vh - sh) / 2); out = Math.min(sw, 1000); }
+        const w = out, h = Math.round(sh * w / sw);
+        cv.width = w; cv.height = h; cx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
+        const r = jsQR(cx.getImageData(0, 0, w, h).data, w, h, {inversionAttempts: tries % 4 === 0 ? "attemptBoth" : "dontInvert"}); if (r) text = r.data;
+        if (tries % 10 === 0) $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요 (보조 읽기 · " + vw + "x" + vh + " · " + tries + "회)";
       }
       if (text) onCode(text);
     }catch(e){}
