@@ -112,12 +112,12 @@ input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;borde
       <div class="types" id="oTypes"></div>
       <img id="oThumb" class="thumb" style="display:none" alt="">
       <div class="row">
-        <button class="btn sm" id="oPhoto">📷 사진</button>
+        <button class="btn sm" id="oPhoto">📷 사진 (필수)</button>
         <button class="btn sm red" id="oUndo" style="display:none">포장 취소</button>
       </div>
       <div class="row stick">
         <button class="btn" id="oCancel">닫기</button>
-        <button class="btn go" id="oSave" disabled>포장완료 저장</button>
+        <button class="btn go" id="oSave" disabled>종류를 고르세요</button>
       </div>
     </div>
 
@@ -127,7 +127,7 @@ input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;borde
         <div class="chips" id="mChips"></div></div>
       <div class="types" id="mTypes"></div>
       <img id="mThumb" class="thumb" style="display:none" alt="">
-      <div class="row"><button class="btn sm" id="mPhoto">📷 사진</button><button class="btn sm red" id="mClear">비우기</button></div>
+      <div class="row"><button class="btn sm" id="mPhoto">📷 사진 (필수)</button><button class="btn sm red" id="mClear">비우기</button></div>
       <div class="row stick">
         <button class="btn" id="mCancel">닫기</button>
         <button class="btn go" id="mSave" disabled>합치기 저장</button>
@@ -318,8 +318,8 @@ async function openOne(key){
   const num = key.split("|")[1], po = key.split("|")[0];
   $("oSite").textContent = po; $("oMain").textContent = "불러오는 중..."; $("oSmall").textContent = "파렛트 " + num;
   $("oBanner").innerHTML = ""; $("oThumb").style.display = "none"; $("oUndo").style.display = "none";
-  $("oSave").disabled = true;
-  typeButtons("oTypes", () => current && current.type, t => { current.type = t; $("oSave").disabled = false; });
+  updateOne();
+  typeButtons("oTypes", () => current && current.type, t => { current.type = t; updateOne(); });
   try{
     const r = await api({action:"info", key}, 10000); setNet(true);
     if (!current || current.key !== key) return;
@@ -332,7 +332,7 @@ async function openOne(key){
     if (s && s.상태 === "포장완료"){
       $("oBanner").innerHTML = `<div class="banner warn">이미 포장완료 · ${s.종류} · ${String(s.포장시각).slice(5,16)}${s.합침 ? " · 합침 " + s.합침 : ""}<br>다시 저장하면 새로 기록됩니다</div>`;
       if (!s.합침) $("oUndo").style.display = "";
-      current.type = s.종류; typeButtons("oTypes", () => current.type, t => { current.type = t; $("oSave").disabled = false; });
+      current.type = s.종류; typeButtons("oTypes", () => current.type, t => { current.type = t; updateOne(); }); updateOne();
     } else if (s && s.상태 && s.상태 !== "대기"){
       $("oBanner").innerHTML = `<div class="banner warn">현재 상태: ${s.상태}</div>`;
     }
@@ -342,8 +342,13 @@ async function openOne(key){
 }
 $("oCancel").onclick = () => closeAll();
 $("oPhoto").onclick = () => { pickFor = "one"; $("file").click(); };
+function updateOne(){
+  const ok = !!(current && current.type && current.photo);
+  const b = $("oSave"); b.disabled = !ok;
+  b.textContent = !current ? "포장완료 저장" : !current.type ? "종류를 고르세요" : !current.photo ? "사진을 찍어야 저장됩니다" : "포장완료 저장";
+}
 $("oSave").onclick = () => {
-  if (!current || !current.type) return;
+  if (!current || !current.type || !current.photo) return;
   const c = current;
   enqueue({action:"pack", key:c.key, type:c.type, photo:c.photo, user:mode, at:Date.now()});
   addRecent(`${c.key.split("|")[1]}번 · ${c.type}`); beep(true);
@@ -381,14 +386,15 @@ function drawMerge(){
     box.appendChild(d);
   });
   typeButtons("mTypes", () => mergeType, t => { mergeType = t; drawMerge(); });
-  $("mSave").disabled = !(mergeKeys.length >= 2 && mergeType);
-  $("mSave").textContent = mergeKeys.length >= 2 ? `${mergeKeys.map(m => m.key.split("|")[1]).sort((a,b)=>a-b).join("+")} 합치기 저장` : "합치기 저장";
+  $("mSave").disabled = !(mergeKeys.length >= 2 && mergeType && mergePhoto);
+  const lbl = mergeKeys.map(m => m.key.split("|")[1]).sort((a,b)=>a-b).join("+");
+  $("mSave").textContent = mergeKeys.length < 2 ? "2개 이상 찍으세요" : !mergeType ? "종류를 고르세요" : !mergePhoto ? "사진을 찍어야 저장됩니다" : `${lbl} 합치기 저장`;
 }
 $("mClear").onclick = () => { mergeKeys = []; drawMerge(); };
 $("mCancel").onclick = () => closeAll();
 $("mPhoto").onclick = () => { pickFor = "merge"; $("file").click(); };
 $("mSave").onclick = () => {
-  if (mergeKeys.length < 2 || !mergeType) return;
+  if (mergeKeys.length < 2 || !mergeType || !mergePhoto) return;
   const nums = mergeKeys.map(m => m.key.split("|")[1]).sort((a,b) => a - b).join("+");
   enqueue({action:"merge", keys:mergeKeys.map(m => m.key), type:mergeType, photo:mergePhoto, user:mode, at:Date.now()});
   addRecent(`합침 ${nums} · ${mergeType}`); beep(true); toast(`${nums} 합쳐서 저장`, "ok"); closeAll();
@@ -401,8 +407,8 @@ $("file").onchange = async ev => {
   if (!f) return;
   try{
     const url = await shrink(f, 1280, .7);
-    if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; }
-    else if (current){ current.photo = url; $("oThumb").src = url; $("oThumb").style.display = ""; }
+    if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
+    else if (current){ current.photo = url; $("oThumb").src = url; $("oThumb").style.display = ""; updateOne(); }
   }catch(e){ toast("사진을 읽지 못했습니다", "bad"); }
 };
 function shrink(file, max, q){
