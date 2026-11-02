@@ -144,7 +144,7 @@ input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;borde
 "use strict";
 const API = "https://script.google.com/macros/s/AKfycbzG5zBEqGenvl0y2aaXL1hvMPBDENRQwCbYi6Y4LwnFS9R8Jl22zl4NM5JfOw6m9t42/exec";
 const TYPES = ["철","작은나무","큰나무","폭좁은나무","기타"];
-const KEY_RE = /^\d{2}-\d{4}-\d{4}-\d{2}\|\d+$/;
+const KEY_RE = /^\d{2}-\d{4}-\d{4}-\d{2}\|\d+(-\d+)?$/;
 const $ = id => document.getElementById(id);
 const ls = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
@@ -263,10 +263,25 @@ function stopCam(){
   scanning = false;
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
 }
+let lastT = -1, lastTAt = 0, restarting = false;
+async function restartCam(){
+  if (restarting) return; restarting = true;
+  try{ stopCam(); await new Promise(r => setTimeout(r, 250)); await startCam(); }finally{ restarting = false; lastT = -1; lastTAt = Date.now(); }
+}
+function camDead(){
+  const v = $("video");
+  if (!stream) return true;
+  const tr = stream.getVideoTracks()[0];
+  if (!tr || tr.readyState !== "live") return true;
+  if (v.paused) return true;
+  if (v.currentTime !== lastT){ lastT = v.currentTime; lastTAt = Date.now(); return false; }
+  return Date.now() - lastTAt > 2500;           // 2.5초 넘게 화면이 안 움직이면 멈춘 것
+}
 const cv = document.createElement("canvas"), cx = cv.getContext("2d", {willReadFrequently:true});
 async function loop(){
   if (!scanning) return;
   const v = $("video");
+  if (!restarting && camDead()){ restartCam(); return; }
   if (!busy && v.readyState >= 2 && v.videoWidth){
     try{
       let text = "";
@@ -404,6 +419,7 @@ $("mSave").onclick = () => {
 let pickFor = "one";
 $("file").onchange = async ev => {
   const f = ev.target.files && ev.target.files[0]; ev.target.value = "";
+  setTimeout(() => { if ($("pack").classList.contains("on") && camDead()) restartCam(); }, 400);
   if (!f) return;
   try{
     const url = await shrink(f, 1280, .7);
@@ -433,7 +449,7 @@ $("btnManual").onclick = () => {
 $("manualCancel").onclick = () => closeAll();
 $("manualOk").onclick = () => {
   let v = $("manualIn").value.trim();
-  if (/^\d+$/.test(v)){ const po = lastPO(); if (!po){ toast("PO를 알 수 없어 PO|번호로 입력해 주세요", "bad"); return; } v = po + "|" + v; }
+  if (/^\d+(-\d+)?$/.test(v)){ const po = lastPO(); if (!po){ toast("PO를 알 수 없어 PO|번호로 입력해 주세요", "bad"); return; } v = po + "|" + v; }
   if (!KEY_RE.test(v)){ toast("형식이 맞지 않습니다", "bad"); return; }
   $("manualBox").style.display = "none"; lastSeen = {key:v, at:Date.now()};
   if (merging) addMerge(v); else openOne(v);
@@ -444,6 +460,9 @@ function lastPO(){ return ls.get("lastPO", ""); }
 function addRecent(t){ recent.unshift(new Date().toTimeString().slice(0,5) + "  " + t); recent = recent.slice(0, 6); ls.set("recent", recent); drawRecent(); }
 function drawRecent(){ $("recent").innerHTML = recent.length ? "<b>방금 한 것</b>" + recent.map(r => "<div>" + r + "</div>").join("") : ""; }
 
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && $("pack").classList.contains("on")){ lastTAt = Date.now(); setTimeout(() => { if (camDead()) restartCam(); }, 500); flush(); }
+});
 setInterval(flush, 8000);
 window.addEventListener("online", () => { ping(); flush(); });
 drawQueue();
