@@ -59,6 +59,11 @@ input[type=text],input[type=tel]{width:100%;font-size:20px;padding:14px;border-r
 .chip.dim{opacity:.45}.chip.hit{background:#12503a;border-color:var(--ok)}
 .lab{display:block;margin-top:12px;font-size:14px;color:var(--sub)}
 .photos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+.phrow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.phs{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:2px solid var(--line);background:var(--card)}
+.phs img{width:100%;height:100%;object-fit:cover}
+.phs.up{border-color:var(--ok)}.phs.wait{opacity:.55}
+.phs b{position:absolute;right:4px;top:2px;font-size:13px;text-shadow:0 1px 3px #000}
 .pbtn{position:relative;border:2px dashed var(--line);background:var(--card);border-radius:14px;min-height:96px;font-size:15px;font-weight:700;padding:6px;overflow:hidden}
 .pbtn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.9}
 .pbtn.done{border-style:solid;border-color:var(--ok)}
@@ -150,8 +155,9 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
         <input type="text" id="planIn" placeholder="예: 60.62.64.74.76" autocomplete="off">
         <div class="chips" id="planChips"></div></details>
       <div class="row"><button class="btn sm" id="sManual">번호 직접 입력</button><button class="btn sm red" id="sClear">비우기</button></div>
+      <div id="phBox1"></div>
       <div class="recent" id="sLast"></div>
-      <div class="row stick"><button class="btn go" id="sNext" disabled>기사 정보 · 사진 →</button></div>
+      <div class="row stick"><button class="btn go" id="sNext" disabled>기사 정보 입력 →</button></div>
     </div>
 
     <!-- 출고: 2) 기사 정보 -->
@@ -161,6 +167,8 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
       <label class="lab">기사 이름</label><input type="text" id="dName" autocomplete="off">
       <label class="lab">전화번호</label><input type="tel" id="dPhone" placeholder="010-0000-0000" autocomplete="off">
       <div class="chips" id="dRecent"></div>
+      <div id="phBox2"></div>
+      <div class="hint">상차 사진은 1장 이상 필요합니다 (최대 5장). 겹쳐 싣는 파렛트는 싣기 전에 미리 찍어도 됩니다.</div>
       <div class="row stick">
         <button class="btn" id="fBack">← 상차로</button>
         <button class="btn go" id="fSave" disabled>출고 확정</button>
@@ -481,19 +489,26 @@ $("file").onchange = async ev => {
   const f = ev.target.files && ev.target.files[0]; ev.target.value = "";
   setTimeout(() => { if ($("pack").classList.contains("on") && camDead()) restartCam(); }, 400);
   if (!f) return;
+  if (pickFor === "ship"){ await addShipPhoto(f); return; }
   try{
     const url = await shrink(f, 1280, .7);
     if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
     else if (current){ current.photo = url; $("oThumb").src = url; $("oThumb").style.display = ""; updateOne(); }
   }catch(e){ toast("사진을 읽지 못했습니다", "bad"); }
 };
-function shrink(file, max, q){
+function shrink(file, max, q, stamp){
   return new Promise((res, rej) => {
     const img = new Image(), u = URL.createObjectURL(file);
     img.onload = () => {
       const k = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      const cx = c.getContext("2d"); cx.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      if (stamp){                                              // 날짜·시간을 사진 오른쪽 아래에 박는다
+        const fs = Math.max(18, Math.round(Math.min(c.width, c.height) * 0.045));
+        cx.font = "bold " + fs + "px sans-serif"; const w = cx.measureText(stamp).width, pad = Math.round(fs * 0.4);
+        cx.fillStyle = "rgba(0,0,0,.6)"; cx.fillRect(c.width - w - pad * 2, c.height - fs - pad * 2, w + pad * 2, fs + pad * 2);
+        cx.fillStyle = "#fff"; cx.textBaseline = "top"; cx.fillText(stamp, c.width - w - pad, c.height - fs - pad);
+      }
       res(c.toDataURL("image/jpeg", q));
     };
     img.onerror = rej; img.src = u;
@@ -519,8 +534,8 @@ function lastPO(){ return ls.get("lastPO", ""); }
 
 // ---------------------------------------------------------------- 출고 (차량 1대 = 출고증 1장)
 let shipMode = false, shipStage = "scan";
-let ship = ls.get("shipSess", null) || {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}};
-let sp = {left:"", right:"", plate:""};
+let ship = ls.get("shipSess", null) || {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}, photos:[]};
+ship.photos = ship.photos || [];
 function saveShip(){ ls.set("shipSess", ship); }
 function newCid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function planNums(){ return (String(ship.plan || "").match(/\d+(?:-\d+)?/g) || []).filter((v, i, a) => a.indexOf(v) === i); }
@@ -565,7 +580,79 @@ function kindSum(items){
   return Object.keys(c).sort((a, b) => (order.indexOf(a) < 0 ? 9 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 9 : order.indexOf(b))).map(k => k + " " + c[k]).join(" · ");
 }
 
+
+// ---------------------------------------------------------------- 상차 사진 (여러 장 · 찍는 즉시 서버로 올림 · 화면이 꺼져도 남음)
+const MAXPH = 5, thumbCache = {};
+const idb = (() => {
+  let db; const mem = new Map();
+  const open = () => new Promise(res => { try{ const r = indexedDB.open("pallet", 1); r.onupgradeneeded = () => r.result.createObjectStore("ph"); r.onsuccess = () => res(r.result); r.onerror = () => res(null); }catch(e){ res(null); } });
+  const get_ = async () => { if (db === undefined) db = await open(); return db; };
+  return {
+    async put(k, v){ mem.set(k, v); const x = await get_(); if (!x) return false; return new Promise(r => { try{ const t = x.transaction("ph", "readwrite"); t.objectStore("ph").put(v, k); t.oncomplete = () => r(true); t.onerror = () => r(false); }catch(e){ r(false); } }); },
+    async get(k){ if (mem.has(k)) return mem.get(k); const x = await get_(); if (!x) return null; return new Promise(r => { try{ const q = x.transaction("ph").objectStore("ph").get(k); q.onsuccess = () => r(q.result || null); q.onerror = () => r(null); }catch(e){ r(null); } }); },
+    async del(k){ mem.delete(k); const x = await get_(); if (!x) return; try{ x.transaction("ph", "readwrite").objectStore("ph").delete(k); }catch(e){} }
+  };
+})();
+function ensureCid(){ if (!ship.cid){ ship.cid = newCid(); saveShip(); } }
+function stampNow(){ const d = new Date(), p = n => ("0" + n).slice(-2); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); }
+function photoCount(){ return {n: ship.photos.length, up: ship.photos.filter(p => p.url).length}; }
+async function addShipPhoto(file){
+  if (ship.photos.length >= MAXPH){ toast("사진은 최대 " + MAXPH + "장입니다", "bad"); return; }
+  try{
+    ensureCid();
+    const url = await shrink(file, 1280, .72, stampNow());
+    const n = ship.photos.reduce((m, p) => Math.max(m, p.n), 0) + 1, key = ship.cid + ":" + n;
+    thumbCache[key] = url; await idb.put(key, url);
+    ship.photos.push({n, url:""}); saveShip(); beep(true);
+    drawShip(); if (shipStage === "fin") drawFin();
+    uploadPhotos();
+  }catch(e){ toast("사진을 읽지 못했습니다", "bad"); }
+}
+let upping = false;
+async function uploadPhotos(){
+  if (upping || !ship.photos.length) return;
+  upping = true;
+  try{
+    for (const p of ship.photos.slice()){
+      if (p.url) continue;
+      const key = ship.cid + ":" + p.n, data = await idb.get(key);
+      if (!data){ ship.photos = ship.photos.filter(x => x !== p); saveShip(); drawShip(); if (shipStage === "fin") drawFin(); toast("사진 1장을 불러오지 못해 뺐습니다. 다시 찍어 주세요", "bad"); continue; }
+      try{
+        const r = await api({action:"shipphoto", cid:ship.cid, n:p.n, data}, 60000); setNet(true);
+        if (ship.photos.indexOf(p) >= 0){ p.url = r.url; saveShip(); drawShip(); if (shipStage === "fin") drawFin(); }
+      }catch(e){
+        if (e.server){ if (!p.warned){ p.warned = 1; toast("사진 올리기 실패: " + e.message, "bad"); } } else setNet(false);
+        break;
+      }
+    }
+  } finally { upping = false; }
+}
+function renderPhotos(){
+  ["phBox1", "phBox2"].forEach(id => {
+    const box = $(id); if (!box) return;
+    const c = photoCount();
+    box.innerHTML = "";
+    const b = document.createElement("button"); b.className = "btn" + (c.n ? "" : " go"); b.style.width = "100%"; b.style.marginTop = "10px";
+    b.textContent = "📷 상차 사진 찍기 (" + c.n + "/" + MAXPH + ")"; b.disabled = c.n >= MAXPH;
+    b.onclick = () => { pickFor = "ship"; $("file").click(); };
+    box.appendChild(b);
+    if (c.n){
+      const row = document.createElement("div"); row.className = "phrow";
+      ship.photos.forEach((p, i) => {
+        const key = ship.cid + ":" + p.n, d = document.createElement("div"); d.className = "phs " + (p.url ? "up" : "wait");
+        d.innerHTML = "<b>" + (p.url ? "✔" : "…") + "</b>";
+        const im = document.createElement("img"); im.alt = ""; d.insertBefore(im, d.firstChild);
+        if (thumbCache[key]) im.src = thumbCache[key]; else idb.get(key).then(v => { if (v){ thumbCache[key] = v; im.src = v; } });
+        d.onclick = () => { if (confirm((i + 1) + "번째 사진을 지울까요?")){ ship.photos = ship.photos.filter(x => x !== p); idb.del(key); delete thumbCache[key]; saveShip(); drawShip(); if (shipStage === "fin") drawFin(); } };
+        row.appendChild(d);
+      });
+      box.appendChild(row);
+    }
+  });
+}
+
 function drawShip(){
+  renderPhotos();
   const box = $("sChips"); box.innerHTML = "";
   ship.items.forEach(it => {
     const d = document.createElement("div"); d.className = "chip" + (it.warn ? " warn" : "");
@@ -586,7 +673,7 @@ function drawShip(){
   $("sSum").textContent = sum;
   const waiting = ship.items.some(i => i.pending);
   $("sNext").disabled = !ship.items.length || waiting;
-  $("sNext").textContent = waiting ? "정보 확인 중..." : "기사 정보 · 사진 →";
+  $("sNext").textContent = waiting ? "정보 확인 중..." : "기사 정보 입력 →";
   const ls_ = ls.get("lastShip", null);
   $("sLast").innerHTML = ls_ ? `<b>마지막 출고</b> ${ls_.id} · ${ls_.n}개 ${ls_.cancelled ? "(취소됨)" : ""}` : "";
 }
@@ -596,7 +683,7 @@ $("sManual").onclick = () => $("btnManual").click();
 $("sNext").onclick = () => {
   if (!ship.items.length) return;
   if (!ship.cid){ ship.cid = newCid(); saveShip(); }
-  shipStage = "fin"; sp = {left:"", right:"", plate:""};
+  shipStage = "fin";
   $("dPlate").value = ship.driver.plate || ""; $("dName").value = ship.driver.name || ""; $("dPhone").value = ship.driver.phone || "";
   showIdle(); drawFin(); window.scrollTo(0, 0);
 };
@@ -613,13 +700,14 @@ function drawFin(){
     c.onclick = () => { $("dPlate").value = d.plate; $("dName").value = d.name || ""; $("dPhone").value = d.phone || ""; $("dPlate").oninput(); };
     rc.appendChild(c);
   });
-  const b = $("fSave"), ok = !!ship.driver.plate;
+  renderPhotos();
+  const pc2 = photoCount(), b = $("fSave"), ok = !!ship.driver.plate && pc2.n > 0 && pc2.up === pc2.n;
   b.disabled = !ok;
-  b.textContent = ok ? "출고 확정" : "차량번호를 입력하세요";
+  b.textContent = ok ? "출고 확정" : !ship.driver.plate ? "차량번호를 입력하세요" : pc2.n === 0 ? "상차 사진을 1장 이상 찍으세요" : "사진 올리는 중... (" + pc2.up + "/" + pc2.n + ")";
 }
 $("fSave").onclick = async () => {
   if ($("fSave").disabled) return;
-  const payload = {action:"ship", keys:ship.items.map(i => i.key), driver:ship.driver, cid:ship.cid, user:mode, at:Date.now()};
+  const payload = {action:"ship", keys:ship.items.map(i => i.key), driver:ship.driver, photoUrls:ship.photos.map(p => p.url), cid:ship.cid, user:mode, at:Date.now()};
   $("fSave").disabled = true; $("fSave").textContent = "저장 중...";
   let res = null;
   try{ res = await api(payload, 90000); setNet(true); }
@@ -629,8 +717,9 @@ $("fSave").onclick = async () => {
   }
   const d = ship.driver; const dr = ls.get("drivers", []).filter(x => x.plate !== d.plate); dr.unshift(d); ls.set("drivers", dr.slice(0, 8));
   const n = ship.items.length, ks3 = kindSum(ship.items);
-  ship = {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}}; saveShip(); $("planIn").value = "";
-  shipStage = "done"; sp = {left:"", right:"", plate:""};
+  const oldPh = ship.photos.map(p => ship.cid + ":" + p.n);
+  ship = {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}, photos:[]}; saveShip(); $("planIn").value = ""; oldPh.forEach(k => { idb.del(k); delete thumbCache[k]; });
+  shipStage = "done";
   if (res){
     ls.set("lastShip", {id:res.출고번호, n:res.개수});
     $("doneId").textContent = res.출고번호; $("doneInfo").textContent = `파렛트 ${res.개수}개 (${ks3}) · ${res.현장 || ""}`;
@@ -659,12 +748,14 @@ function drawRecent(){ $("recent").innerHTML = recent.length ? "<b>방금 한 �
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && $("pack").classList.contains("on")){ lastTAt = Date.now(); setTimeout(() => { if (camDead()) restartCam(); }, 500); flush(); }
 });
-setInterval(flush, 8000);
-window.addEventListener("online", () => { ping(); flush(); });
+setInterval(() => { flush(); uploadPhotos(); }, 8000);
+window.addEventListener("online", () => { ping(); flush(); uploadPhotos(); });
 drawQueue();
 if (mode) $("modeName").textContent = mode;
 $("planIn").value = ship.plan || "";
 ping();
+uploadPhotos();
+if (mode === "출고" && (ship.items.length || ship.photos.length)) openPack();          // 앱이 닫혔다 다시 열려도 상차하던 화면으로 바로 돌아온다
 </script>
 </body>
 </html>
