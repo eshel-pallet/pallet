@@ -54,7 +54,16 @@ h1{font-size:22px;margin:0}
 .toast{position:fixed;left:12px;right:12px;bottom:16px;background:#0b1118;border:1px solid var(--line);border-radius:14px;padding:14px;font-size:17px;display:none;z-index:9}
 .toast.on{display:block}
 .toast.ok{border-color:var(--ok)}.toast.bad{border-color:var(--bad)}
-input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;border:2px solid var(--line);background:#0f1822;color:var(--tx)}
+input[type=text],input[type=tel]{width:100%;font-size:20px;padding:14px;border-radius:12px;border:2px solid var(--line);background:#0f1822;color:var(--tx)}
+.chip.warn{border-color:var(--warn);background:#4a3a14}
+.chip.dim{opacity:.45}.chip.hit{background:#12503a;border-color:var(--ok)}
+.lab{display:block;margin-top:12px;font-size:14px;color:var(--sub)}
+.photos{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+.pbtn{position:relative;border:2px dashed var(--line);background:var(--card);border-radius:14px;min-height:96px;font-size:15px;font-weight:700;padding:6px;overflow:hidden}
+.pbtn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.9}
+.pbtn.done{border-style:solid;border-color:var(--ok)}
+.pbtn span{position:relative;text-shadow:0 1px 3px #000}
+details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
 .hint{color:var(--sub);font-size:14px;margin-top:8px}
 .recent{margin-top:14px;font-size:14px;color:var(--sub)}
 .recent div{padding:4px 0;border-bottom:1px solid #263544}
@@ -68,8 +77,7 @@ input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;borde
     <h1>파렛트 스캔</h1>
     <p class="hint">누가 쓰는 휴대폰인지 고르세요. 기록에 이 이름이 남습니다.</p>
     <button class="big pack" data-mode="포장">포장</button>
-    <button class="big ship" data-mode="출고1" disabled>출고 1 <small>(준비 중)</small></button>
-    <button class="big ship" data-mode="출고2" disabled>출고 2 <small>(준비 중)</small></button>
+    <button class="big ship" data-mode="출고">출고</button>
     <div id="homeNet" class="hint"></div>
   </div>
 </section>
@@ -133,6 +141,47 @@ input[type=text]{width:100%;font-size:20px;padding:14px;border-radius:12px;borde
         <button class="btn go" id="mSave" disabled>합치기 저장</button>
       </div>
     </div>
+    <!-- 출고: 1) 상차한 파렛트 QR 찍기 -->
+    <div id="shipBox" style="display:none">
+      <div class="card"><div class="main" style="font-size:22px">출고 상차 <span style="font-size:15px;color:var(--sub);font-weight:400">(차량 1대)</span></div>
+        <div class="small" id="sSum">상차한 파렛트의 QR을 하나씩 찍으세요</div>
+        <div class="chips" id="sChips"></div></div>
+      <details id="planBox"><summary>출고 지시 번호 붙여넣기 (선택) - 빠진 파렛트 확인용</summary>
+        <input type="text" id="planIn" placeholder="예: 60.62.64.74.76" autocomplete="off">
+        <div class="chips" id="planChips"></div></details>
+      <div class="row"><button class="btn sm" id="sManual">번호 직접 입력</button><button class="btn sm red" id="sClear">비우기</button></div>
+      <div class="recent" id="sLast"></div>
+      <div class="row stick"><button class="btn go" id="sNext" disabled>기사 정보 · 사진 →</button></div>
+    </div>
+
+    <!-- 출고: 2) 기사 정보 + 사진 -->
+    <div id="shipFin" style="display:none">
+      <div class="card"><div class="main" style="font-size:22px" id="fSum">출고</div></div>
+      <label class="lab">차량번호 (필수)</label><input type="text" id="dPlate" placeholder="예: 경기95자6180" autocomplete="off">
+      <label class="lab">기사 이름</label><input type="text" id="dName" autocomplete="off">
+      <label class="lab">전화번호</label><input type="tel" id="dPhone" placeholder="010-0000-0000" autocomplete="off">
+      <div class="chips" id="dRecent"></div>
+      <div class="photos">
+        <button class="pbtn" id="pLeft"><span>📷 좌측면</span></button>
+        <button class="pbtn" id="pRight"><span>📷 우측면</span></button>
+        <button class="pbtn" id="pPlate"><span>📷 번호판</span></button>
+      </div>
+      <div class="hint">좌측면·우측면 사진은 꼭 필요합니다. 번호판은 선택입니다.</div>
+      <div class="row stick">
+        <button class="btn" id="fBack">← 상차로</button>
+        <button class="btn go" id="fSave" disabled>출고 확정</button>
+      </div>
+    </div>
+
+    <!-- 출고: 3) 완료 -->
+    <div id="shipDone" style="display:none">
+      <div class="card"><div class="site">출고 확정</div><div class="main" id="doneId"></div><div class="small" id="doneInfo"></div></div>
+      <div class="banner ok" id="doneMsg"></div>
+      <div class="row stick">
+        <button class="btn red" id="doneUndo">이 출고 취소</button>
+        <button class="btn go" id="doneNew">새 출고</button>
+      </div>
+    </div>
   </div>
   <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
 </section>
@@ -188,7 +237,7 @@ async function ping(){
 function saveQueue(){
   if (!ls.set("queue", queue)){
     // 저장 공간이 모자라면 사진을 빼고라도 기록은 남긴다
-    queue.forEach(q => { if (q.photo) q.photo = ""; });
+    queue.forEach(q => { if (q.photo) q.photo = ""; if (q.photos) q.photos = {}; });
     ls.set("queue", queue);
     toast("휴대폰 저장 공간이 부족해 사진은 빼고 기록만 저장했습니다", "bad");
   }
@@ -240,7 +289,9 @@ $("backHome").onclick = () => { stopCam(); closeAll(); show("home"); };
 
 async function openPack(){
   $("modeName").textContent = mode;
+  shipMode = (mode === "출고"); shipStage = "scan";
   show("pack"); drawQueue(); drawRecent(); closeAll();
+  if (shipMode) drawShip();
   ping(); flush();
   await startCam();
 }
@@ -311,6 +362,7 @@ function onCode(text){
   if (text === lastSeen.key && now - lastSeen.at < 3500){ lastSeen.at = now; return; }
   lastSeen = {key:text, at:now};
   if (!KEY_RE.test(text)){ beep(false); toast("파렛트 QR이 아닙니다: " + text.slice(0, 40), "bad"); return; }
+  if (shipMode){ if (shipStage === "scan" && !busy) addShip(text); return; }
   if (merging) return addMerge(text);
   if (current) return;                      // 이미 카드가 떠 있으면 무시
   openOne(text);
@@ -319,7 +371,15 @@ function onCode(text){
 function closeAll(){
   current = null; merging = false; mergeKeys = []; mergeType = ""; mergePhoto = "";
   ["one","mergeBox","manualBox"].forEach(i => $(i).style.display = "none");
-  $("idle").style.display = ""; busy = false; lastSeen.at = Date.now(); document.body.classList.remove("working");
+  busy = false; lastSeen.at = Date.now(); document.body.classList.remove("working");
+  showIdle();
+}
+function showIdle(){
+  ["idle","shipBox","shipFin","shipDone"].forEach(i => $(i).style.display = "none");
+  if (!shipMode){ $("idle").style.display = ""; return; }
+  if (shipStage === "fin"){ $("shipFin").style.display = ""; document.body.classList.add("working"); }
+  else if (shipStage === "done"){ $("shipDone").style.display = ""; document.body.classList.add("working"); }
+  else $("shipBox").style.display = "";
 }
 function typeButtons(boxId, getSel, setSel){
   const box = $(boxId); box.innerHTML = "";
@@ -429,7 +489,8 @@ $("file").onchange = async ev => {
   if (!f) return;
   try{
     const url = await shrink(f, 1280, .7);
-    if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
+    if (pickFor.indexOf("s_") === 0){ sp[pickFor.slice(2)] = url; drawFin(); }
+    else if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
     else if (current){ current.photo = url; $("oThumb").src = url; $("oThumb").style.display = ""; updateOne(); }
   }catch(e){ toast("사진을 읽지 못했습니다", "bad"); }
 };
@@ -448,7 +509,7 @@ function shrink(file, max, q){
 
 // ---------------------------------------------------------------- 번호 직접 입력 (멀리서 안 찍힐 때)
 $("btnManual").onclick = () => {
-  $("idle").style.display = "none"; $("manualBox").style.display = "";
+  ["idle","shipBox"].forEach(i => $(i).style.display = "none"); $("manualBox").style.display = "";
   const po = lastPO(); $("manualHint").textContent = po ? "번호만 넣으면 마지막으로 쓴 PO(" + po + ")로 인식합니다" : "PO|번호 형태로 입력하세요 (예: 26-2602-0010-01|586)";
   $("manualIn").value = ""; setTimeout(() => $("manualIn").focus(), 50);
 };
@@ -458,9 +519,137 @@ $("manualOk").onclick = () => {
   if (/^\d+(-\d+)?$/.test(v)){ const po = lastPO(); if (!po){ toast("PO를 알 수 없어 PO|번호로 입력해 주세요", "bad"); return; } v = po + "|" + v; }
   if (!KEY_RE.test(v)){ toast("형식이 맞지 않습니다", "bad"); return; }
   $("manualBox").style.display = "none"; lastSeen = {key:v, at:Date.now()};
+  if (shipMode){ showIdle(); addShip(v); return; }
   if (merging) addMerge(v); else openOne(v);
 };
 function lastPO(){ return ls.get("lastPO", ""); }
+
+// ---------------------------------------------------------------- 출고 (차량 1대 = 출고증 1장)
+let shipMode = false, shipStage = "scan";
+let ship = ls.get("shipSess", null) || {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}};
+let sp = {left:"", right:"", plate:""};
+function saveShip(){ ls.set("shipSess", ship); }
+function newCid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function planNums(){ return (String(ship.plan || "").match(/\d+(?:-\d+)?/g) || []).filter((v, i, a) => a.indexOf(v) === i); }
+function itemNums(it){ const a = [it.num]; if (it.label) it.label.split("+").forEach(x => a.push(x)); return a; }
+
+async function addShip(key){
+  busy = true;
+  try{
+    const po = key.split("|")[0], num = key.split("|")[1];
+    if (ship.items.some(i => i.key === key)){ toast("이미 찍은 파렛트입니다", "bad"); beep(false); return; }
+    ls.set("lastPO", po);
+    let info = null;
+    try{ info = await api({action:"info", key}, 8000); setNet(true); }catch(e){ setNet(false); }
+    const g = info && info.등록, s = info && info.상태;
+    if (s && s.합침 && ship.items.some(i => i.label === s.합침 && i.po === po)){ toast("같은 합침 파렛트(" + s.합침 + ")는 이미 찍었습니다", "bad"); beep(false); return; }
+    if (s && s.상태 === "출고"){ toast(num + "번은 이미 출고되었습니다 (" + (s.출고조 || "") + ")", "bad"); beep(false); return; }
+    if (info && (!s || s.상태 !== "포장완료")){
+      beep(false);
+      if (!confirm(num + "번은 포장완료 기록이 없습니다 (현재: " + ((s && s.상태) || "기록 없음") + ").\n그래도 이 차에 싣나요?")) return;
+    }
+    if (ship.items.length && ship.items[0].po !== po){
+      if (!confirm("먼저 찍은 파렛트와 PO가 다릅니다.\n같은 차에 싣나요?")) return;
+    }
+    const it = {key, po, num, label:(s && s.합침) || "", dong:g ? String(g.동) : "", kind:(s && s.종류) || "", warn:info ? "" : "확인 못함"};
+    const pn = planNums();
+    if (pn.length && !itemNums(it).some(n => pn.indexOf(n) >= 0)){ it.warn = "지시에 없음"; toast(num + "번은 출고 지시 번호에 없습니다", "bad"); beep(false); }
+    else beep(true);
+    ship.items.push(it); saveShip(); drawShip();
+  } finally { busy = false; lastSeen.at = Date.now(); }
+}
+
+function drawShip(){
+  const box = $("sChips"); box.innerHTML = "";
+  ship.items.forEach(it => {
+    const d = document.createElement("div"); d.className = "chip" + (it.warn ? " warn" : "");
+    d.innerHTML = `${it.label || it.num}<i>${it.dong} ${it.kind}${it.warn ? " · " + it.warn : ""}</i> ✕`;
+    d.onclick = () => { ship.items = ship.items.filter(x => x !== it); saveShip(); drawShip(); };
+    box.appendChild(d);
+  });
+  const iron = ship.items.filter(i => i.kind === "철").length;
+  let sum = ship.items.length ? `파렛트 ${ship.items.length}개 · 철 ${iron}개` : "상차한 파렛트의 QR을 하나씩 찍으세요";
+  const pn = planNums(), got = {};
+  ship.items.forEach(it => itemNums(it).forEach(n => got[n] = 1));
+  const pc = $("planChips"); pc.innerHTML = "";
+  pn.forEach(n => { const d = document.createElement("div"); d.className = "chip " + (got[n] ? "hit" : "dim"); d.textContent = n + (got[n] ? " ✓" : ""); pc.appendChild(d); });
+  if (pn.length){
+    const left = pn.filter(n => !got[n]);
+    sum += left.length ? ` · 지시 ${pn.length}개 중 ${left.length}개 남음 (${left.join(", ")})` : ` · 지시 ${pn.length}개 모두 확인`;
+  }
+  $("sSum").textContent = sum;
+  $("sNext").disabled = !ship.items.length;
+  const ls_ = ls.get("lastShip", null);
+  $("sLast").innerHTML = ls_ ? `<b>마지막 출고</b> ${ls_.id} · ${ls_.n}개 ${ls_.cancelled ? "(취소됨)" : ""}` : "";
+}
+$("planIn").oninput = () => { ship.plan = $("planIn").value; saveShip(); drawShip(); };
+$("sClear").onclick = () => { if (!ship.items.length || confirm("찍은 파렛트를 모두 비울까요?")){ ship.items = []; ship.plan = ""; $("planIn").value = ""; saveShip(); drawShip(); } };
+$("sManual").onclick = () => $("btnManual").click();
+$("sNext").onclick = () => {
+  if (!ship.items.length) return;
+  if (!ship.cid){ ship.cid = newCid(); saveShip(); }
+  shipStage = "fin"; sp = {left:"", right:"", plate:""};
+  $("dPlate").value = ship.driver.plate || ""; $("dName").value = ship.driver.name || ""; $("dPhone").value = ship.driver.phone || "";
+  showIdle(); drawFin(); window.scrollTo(0, 0);
+};
+$("fBack").onclick = () => { shipStage = "scan"; document.body.classList.remove("working"); showIdle(); drawShip(); };
+["dPlate","dName","dPhone"].forEach(id => $(id).oninput = () => {
+  ship.driver = {plate:$("dPlate").value.trim(), name:$("dName").value.trim(), phone:$("dPhone").value.trim()}; saveShip(); drawFin();
+});
+$("pLeft").onclick = () => { pickFor = "s_left"; $("file").click(); };
+$("pRight").onclick = () => { pickFor = "s_right"; $("file").click(); };
+$("pPlate").onclick = () => { pickFor = "s_plate"; $("file").click(); };
+function drawFin(){
+  const iron = ship.items.filter(i => i.kind === "철").length;
+  $("fSum").textContent = `파렛트 ${ship.items.length}개 · 철 ${iron}개`;
+  [["pLeft","left","좌측면"],["pRight","right","우측면"],["pPlate","plate","번호판"]].forEach(a => {
+    const b = $(a[0]); b.className = "pbtn" + (sp[a[1]] ? " done" : "");
+    b.innerHTML = (sp[a[1]] ? `<img src="${sp[a[1]]}" alt="">` : "") + `<span>${sp[a[1]] ? "✔ " : "📷 "}${a[2]}</span>`;
+  });
+  const rc = $("dRecent"); rc.innerHTML = "";
+  ls.get("drivers", []).forEach(d => {
+    const c = document.createElement("div"); c.className = "chip"; c.innerHTML = `${d.plate}<i>${d.name || ""}</i>`;
+    c.onclick = () => { $("dPlate").value = d.plate; $("dName").value = d.name || ""; $("dPhone").value = d.phone || ""; $("dPlate").oninput(); };
+    rc.appendChild(c);
+  });
+  const b = $("fSave"), ok = !!(ship.driver.plate && sp.left && sp.right);
+  b.disabled = !ok;
+  b.textContent = !ship.driver.plate ? "차량번호를 입력하세요" : !(sp.left && sp.right) ? "좌측면·우측면 사진이 필요합니다" : "출고 확정";
+}
+$("fSave").onclick = async () => {
+  if ($("fSave").disabled) return;
+  const payload = {action:"ship", keys:ship.items.map(i => i.key), driver:ship.driver, photos:{left:sp.left, right:sp.right, plate:sp.plate}, cid:ship.cid, user:mode, at:Date.now()};
+  $("fSave").disabled = true; $("fSave").textContent = "저장 중...";
+  let res = null;
+  try{ res = await api(payload, 90000); setNet(true); }
+  catch(e){
+    if (e.server){ toast(e.message, "bad"); drawFin(); return; }
+    setNet(false); enqueue(payload);                       // 신호가 약하면 휴대폰에 저장해 두었다가 자동 전송
+  }
+  const d = ship.driver; const dr = ls.get("drivers", []).filter(x => x.plate !== d.plate); dr.unshift(d); ls.set("drivers", dr.slice(0, 8));
+  const n = ship.items.length, iron = ship.items.filter(i => i.kind === "철").length;
+  ship = {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}}; saveShip(); $("planIn").value = "";
+  shipStage = "done"; sp = {left:"", right:"", plate:""};
+  if (res){
+    ls.set("lastShip", {id:res.출고번호, n:res.개수});
+    $("doneId").textContent = res.출고번호; $("doneInfo").textContent = `파렛트 ${res.개수}개 · 철 ${res.철}개 · ${res.현장 || ""}`;
+    $("doneMsg").textContent = "저장되었습니다. 출고증은 인쇄 PC에서 곧 나옵니다." + ((res.건너뜀 || []).length ? " (이미 출고된 " + res.건너뜀.length + "개는 제외됨)" : "");
+    $("doneUndo").style.display = "";
+  } else {
+    ls.set("lastShip", null);
+    $("doneId").textContent = "전송 대기"; $("doneInfo").textContent = `파렛트 ${n}개 · 철 ${iron}개`;
+    $("doneMsg").textContent = "신호가 약해 휴대폰에 저장했습니다. 연결되면 자동으로 올라가고, 그 뒤에 출고증이 인쇄됩니다.";
+    $("doneUndo").style.display = "none";
+  }
+  beep(true); showIdle();
+};
+$("doneNew").onclick = () => { shipStage = "scan"; document.body.classList.remove("working"); showIdle(); drawShip(); };
+$("doneUndo").onclick = async () => {
+  const l = ls.get("lastShip", null); if (!l) return;
+  if (!confirm(l.id + " 출고를 취소할까요?\n파렛트가 포장완료 상태로 돌아갑니다.")) return;
+  try{ await api({action:"shipundo", id:l.id, user:mode}, 20000); l.cancelled = true; ls.set("lastShip", l); toast("출고를 취소했습니다", "ok"); $("doneUndo").style.display = "none"; $("doneMsg").textContent = l.id + " 출고를 취소했습니다. 인쇄한 출고증은 버려 주세요."; }
+  catch(e){ toast(e.message, "bad"); }
+};
 
 // ---------------------------------------------------------------- 최근 기록
 function addRecent(t){ recent.unshift(new Date().toTimeString().slice(0,5) + "  " + t); recent = recent.slice(0, 6); ls.set("recent", recent); drawRecent(); }
@@ -473,6 +662,7 @@ setInterval(flush, 8000);
 window.addEventListener("online", () => { ping(); flush(); });
 drawQueue();
 if (mode) $("modeName").textContent = mode;
+$("planIn").value = ship.plan || "";
 ping();
 </script>
 </body>
