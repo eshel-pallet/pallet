@@ -154,19 +154,13 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
       <div class="row stick"><button class="btn go" id="sNext" disabled>기사 정보 · 사진 →</button></div>
     </div>
 
-    <!-- 출고: 2) 기사 정보 + 사진 -->
+    <!-- 출고: 2) 기사 정보 -->
     <div id="shipFin" style="display:none">
       <div class="card"><div class="main" style="font-size:22px" id="fSum">출고</div></div>
       <label class="lab">차량번호 (필수)</label><input type="text" id="dPlate" placeholder="예: 경기95자6180" autocomplete="off">
       <label class="lab">기사 이름</label><input type="text" id="dName" autocomplete="off">
       <label class="lab">전화번호</label><input type="tel" id="dPhone" placeholder="010-0000-0000" autocomplete="off">
       <div class="chips" id="dRecent"></div>
-      <div class="photos">
-        <button class="pbtn" id="pLeft"><span>📷 좌측면</span></button>
-        <button class="pbtn" id="pRight"><span>📷 우측면</span></button>
-        <button class="pbtn" id="pPlate"><span>📷 번호판</span></button>
-      </div>
-      <div class="hint">좌측면·우측면 사진은 꼭 필요합니다. 번호판은 선택입니다.</div>
       <div class="row stick">
         <button class="btn" id="fBack">← 상차로</button>
         <button class="btn go" id="fSave" disabled>출고 확정</button>
@@ -489,8 +483,7 @@ $("file").onchange = async ev => {
   if (!f) return;
   try{
     const url = await shrink(f, 1280, .7);
-    if (pickFor.indexOf("s_") === 0){ sp[pickFor.slice(2)] = url; drawFin(); }
-    else if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
+    if (pickFor === "merge"){ mergePhoto = url; $("mThumb").src = url; $("mThumb").style.display = ""; drawMerge(); }
     else if (current){ current.photo = url; $("oThumb").src = url; $("oThumb").style.display = ""; updateOne(); }
   }catch(e){ toast("사진을 읽지 못했습니다", "bad"); }
 };
@@ -611,29 +604,22 @@ $("fBack").onclick = () => { shipStage = "scan"; document.body.classList.remove(
 ["dPlate","dName","dPhone"].forEach(id => $(id).oninput = () => {
   ship.driver = {plate:$("dPlate").value.trim(), name:$("dName").value.trim(), phone:$("dPhone").value.trim()}; saveShip(); drawFin();
 });
-$("pLeft").onclick = () => { pickFor = "s_left"; $("file").click(); };
-$("pRight").onclick = () => { pickFor = "s_right"; $("file").click(); };
-$("pPlate").onclick = () => { pickFor = "s_plate"; $("file").click(); };
 function drawFin(){
   const ks2 = kindSum(ship.items);
   $("fSum").textContent = `파렛트 ${ship.items.length}개` + (ks2 ? ` (${ks2})` : "");
-  [["pLeft","left","좌측면"],["pRight","right","우측면"],["pPlate","plate","번호판"]].forEach(a => {
-    const b = $(a[0]); b.className = "pbtn" + (sp[a[1]] ? " done" : "");
-    b.innerHTML = (sp[a[1]] ? `<img src="${sp[a[1]]}" alt="">` : "") + `<span>${sp[a[1]] ? "✔ " : "📷 "}${a[2]}</span>`;
-  });
   const rc = $("dRecent"); rc.innerHTML = "";
   ls.get("drivers", []).forEach(d => {
     const c = document.createElement("div"); c.className = "chip"; c.innerHTML = `${d.plate}<i>${d.name || ""}</i>`;
     c.onclick = () => { $("dPlate").value = d.plate; $("dName").value = d.name || ""; $("dPhone").value = d.phone || ""; $("dPlate").oninput(); };
     rc.appendChild(c);
   });
-  const b = $("fSave"), ok = !!(ship.driver.plate && sp.left && sp.right);
+  const b = $("fSave"), ok = !!ship.driver.plate;
   b.disabled = !ok;
-  b.textContent = !ship.driver.plate ? "차량번호를 입력하세요" : !(sp.left && sp.right) ? "좌측면·우측면 사진이 필요합니다" : "출고 확정";
+  b.textContent = ok ? "출고 확정" : "차량번호를 입력하세요";
 }
 $("fSave").onclick = async () => {
   if ($("fSave").disabled) return;
-  const payload = {action:"ship", keys:ship.items.map(i => i.key), driver:ship.driver, photos:{left:sp.left, right:sp.right, plate:sp.plate}, cid:ship.cid, user:mode, at:Date.now()};
+  const payload = {action:"ship", keys:ship.items.map(i => i.key), driver:ship.driver, cid:ship.cid, user:mode, at:Date.now()};
   $("fSave").disabled = true; $("fSave").textContent = "저장 중...";
   let res = null;
   try{ res = await api(payload, 90000); setNet(true); }
