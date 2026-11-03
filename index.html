@@ -291,7 +291,7 @@ async function openPack(){
   $("modeName").textContent = mode;
   shipMode = (mode === "출고"); shipStage = "scan";
   show("pack"); drawQueue(); drawRecent(); closeAll();
-  if (shipMode) drawShip();
+  if (shipMode){ drawShip(); ship.items.filter(i => i.pending).forEach(lookup); }
   ping(); flush();
   await startCam();
 }
@@ -352,7 +352,7 @@ async function loop(){
       if (text) onCode(text);
     }catch(e){}
   }
-  setTimeout(loop, 120);
+  setTimeout(loop, detector ? 50 : 120);
 }
 
 // ---------------------------------------------------------------- 코드가 읽혔을 때
@@ -533,42 +533,55 @@ function newCid(){ return Date.now().toString(36) + Math.random().toString(36).s
 function planNums(){ return (String(ship.plan || "").match(/\d+(?:-\d+)?/g) || []).filter((v, i, a) => a.indexOf(v) === i); }
 function itemNums(it){ const a = [it.num]; if (it.label) it.label.split("+").forEach(x => a.push(x)); return a; }
 
-async function addShip(key){
-  busy = true;
-  try{
-    const po = key.split("|")[0], num = key.split("|")[1];
-    if (ship.items.some(i => i.key === key)){ toast("이미 찍은 파렛트입니다", "bad"); beep(false); return; }
-    ls.set("lastPO", po);
-    let info = null;
-    try{ info = await api({action:"info", key}, 8000); setNet(true); }catch(e){ setNet(false); }
-    const g = info && info.등록, s = info && info.상태;
-    if (s && s.합침 && ship.items.some(i => i.label === s.합침 && i.po === po)){ toast("같은 합침 파렛트(" + s.합침 + ")는 이미 찍었습니다", "bad"); beep(false); return; }
-    if (s && s.상태 === "출고"){ toast(num + "번은 이미 출고되었습니다 (" + (s.출고조 || "") + ")", "bad"); beep(false); return; }
-    if (info && (!s || s.상태 !== "포장완료")){
-      beep(false);
-      if (!confirm(num + "번은 포장완료 기록이 없습니다 (현재: " + ((s && s.상태) || "기록 없음") + ").\n그래도 이 차에 싣나요?")) return;
-    }
-    if (ship.items.length && ship.items[0].po !== po){
-      if (!confirm("먼저 찍은 파렛트와 PO가 다릅니다.\n같은 차에 싣나요?")) return;
-    }
-    const it = {key, po, num, label:(s && s.합침) || "", dong:g ? String(g.동) : "", kind:(s && s.종류) || "", warn:info ? "" : "확인 못함"};
-    const pn = planNums();
-    if (pn.length && !itemNums(it).some(n => pn.indexOf(n) >= 0)){ it.warn = "지시에 없음"; toast(num + "번은 출고 지시 번호에 없습니다", "bad"); beep(false); }
-    else beep(true);
-    ship.items.push(it); saveShip(); drawShip();
-  } finally { busy = false; lastSeen.at = Date.now(); }
+function addShip(key){
+  const po = key.split("|")[0], num = key.split("|")[1];
+  if (ship.items.some(i => i.key === key)){ toast("이미 찍은 파렛트입니다", "bad"); beep(false); return; }
+  if (ship.items.length && ship.items[0].po !== po){
+    if (!confirm("먼저 찍은 파렛트와 PO가 다릅니다.\n같은 차에 싣나요?")) return;
+  }
+  ls.set("lastPO", po);
+  // 서버 확인을 기다리지 않고 바로 목록에 넣는다 (기다리는 동안 다음 QR을 찍을 수 있다)
+  const it = {key, po, num, label:"", dong:"", kind:"", warn:"", pending:true};
+  ship.items.push(it); beep(true); saveShip(); drawShip();
+  lookup(it);
+}
+
+async function lookup(it){
+  let info = null;
+  try{ info = await api({action:"info", key:it.key}, 15000); setNet(true); }
+  catch(e){ setNet(false); it.pending = false; it.warn = "확인 못함"; saveShip(); drawShip(); return; }
+  if (ship.items.indexOf(it) < 0) return;                 // 그 사이 사용자가 지운 경우
+  const g = info && info.등록, s = info && info.상태;
+  const drop = (msg) => { ship.items = ship.items.filter(x => x !== it); saveShip(); drawShip(); if (msg){ toast(msg, "bad"); beep(false); } };
+  if (s && s.합침 && ship.items.some(i => i !== it && i.label === s.합침 && i.po === it.po)) return drop("같은 합침 파렛트(" + s.합침 + ")는 이미 찍었습니다");
+  if (s && s.상태 === "출고") return drop(it.num + "번은 이미 출고되었습니다 (" + (s.출고조 || "") + ")");
+  if (!s || s.상태 !== "포장완료"){
+    beep(false);
+    if (!confirm(it.num + "번은 포장완료 기록이 없습니다 (현재: " + ((s && s.상태) || "기록 없음") + ").\n그래도 이 차에 싣나요?")) return drop("");
+  }
+  it.pending = false; it.label = (s && s.합침) || ""; it.dong = g ? String(g.동) : ""; it.kind = (s && s.종류) || "";
+  const pn = planNums();
+  if (pn.length && !itemNums(it).some(n => pn.indexOf(n) >= 0)){ it.warn = "지시에 없음"; toast(it.num + "번은 출고 지시 번호에 없습니다", "bad"); beep(false); }
+  saveShip(); drawShip();
+}
+
+// 종류별 개수 글자: "철 6 · 폭좁은나무 1"
+function kindSum(items){
+  const order = ["철","큰나무","작은나무","폭좁은나무","기타"], c = {};
+  items.forEach(i => { if (i.pending) return; const k = i.kind || "종류 미정"; c[k] = (c[k] || 0) + 1; });
+  return Object.keys(c).sort((a, b) => (order.indexOf(a) < 0 ? 9 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 9 : order.indexOf(b))).map(k => k + " " + c[k]).join(" · ");
 }
 
 function drawShip(){
   const box = $("sChips"); box.innerHTML = "";
   ship.items.forEach(it => {
     const d = document.createElement("div"); d.className = "chip" + (it.warn ? " warn" : "");
-    d.innerHTML = `${it.label || it.num}<i>${it.dong} ${it.kind}${it.warn ? " · " + it.warn : ""}</i> ✕`;
+    d.innerHTML = `${it.label || it.num}<i>${it.pending ? "확인 중…" : (it.dong + " " + it.kind + (it.warn ? " · " + it.warn : ""))}</i> ✕`;
     d.onclick = () => { ship.items = ship.items.filter(x => x !== it); saveShip(); drawShip(); };
     box.appendChild(d);
   });
-  const iron = ship.items.filter(i => i.kind === "철").length;
-  let sum = ship.items.length ? `파렛트 ${ship.items.length}개 · 철 ${iron}개` : "상차한 파렛트의 QR을 하나씩 찍으세요";
+  const ks = kindSum(ship.items);
+  let sum = ship.items.length ? `파렛트 ${ship.items.length}개` + (ks ? ` (${ks})` : "") : "상차한 파렛트의 QR을 하나씩 찍으세요";
   const pn = planNums(), got = {};
   ship.items.forEach(it => itemNums(it).forEach(n => got[n] = 1));
   const pc = $("planChips"); pc.innerHTML = "";
@@ -578,7 +591,9 @@ function drawShip(){
     sum += left.length ? ` · 지시 ${pn.length}개 중 ${left.length}개 남음 (${left.join(", ")})` : ` · 지시 ${pn.length}개 모두 확인`;
   }
   $("sSum").textContent = sum;
-  $("sNext").disabled = !ship.items.length;
+  const waiting = ship.items.some(i => i.pending);
+  $("sNext").disabled = !ship.items.length || waiting;
+  $("sNext").textContent = waiting ? "정보 확인 중..." : "기사 정보 · 사진 →";
   const ls_ = ls.get("lastShip", null);
   $("sLast").innerHTML = ls_ ? `<b>마지막 출고</b> ${ls_.id} · ${ls_.n}개 ${ls_.cancelled ? "(취소됨)" : ""}` : "";
 }
@@ -600,8 +615,8 @@ $("pLeft").onclick = () => { pickFor = "s_left"; $("file").click(); };
 $("pRight").onclick = () => { pickFor = "s_right"; $("file").click(); };
 $("pPlate").onclick = () => { pickFor = "s_plate"; $("file").click(); };
 function drawFin(){
-  const iron = ship.items.filter(i => i.kind === "철").length;
-  $("fSum").textContent = `파렛트 ${ship.items.length}개 · 철 ${iron}개`;
+  const ks2 = kindSum(ship.items);
+  $("fSum").textContent = `파렛트 ${ship.items.length}개` + (ks2 ? ` (${ks2})` : "");
   [["pLeft","left","좌측면"],["pRight","right","우측면"],["pPlate","plate","번호판"]].forEach(a => {
     const b = $(a[0]); b.className = "pbtn" + (sp[a[1]] ? " done" : "");
     b.innerHTML = (sp[a[1]] ? `<img src="${sp[a[1]]}" alt="">` : "") + `<span>${sp[a[1]] ? "✔ " : "📷 "}${a[2]}</span>`;
@@ -627,17 +642,17 @@ $("fSave").onclick = async () => {
     setNet(false); enqueue(payload);                       // 신호가 약하면 휴대폰에 저장해 두었다가 자동 전송
   }
   const d = ship.driver; const dr = ls.get("drivers", []).filter(x => x.plate !== d.plate); dr.unshift(d); ls.set("drivers", dr.slice(0, 8));
-  const n = ship.items.length, iron = ship.items.filter(i => i.kind === "철").length;
+  const n = ship.items.length, ks3 = kindSum(ship.items);
   ship = {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}}; saveShip(); $("planIn").value = "";
   shipStage = "done"; sp = {left:"", right:"", plate:""};
   if (res){
     ls.set("lastShip", {id:res.출고번호, n:res.개수});
-    $("doneId").textContent = res.출고번호; $("doneInfo").textContent = `파렛트 ${res.개수}개 · 철 ${res.철}개 · ${res.현장 || ""}`;
+    $("doneId").textContent = res.출고번호; $("doneInfo").textContent = `파렛트 ${res.개수}개 (${ks3}) · ${res.현장 || ""}`;
     $("doneMsg").textContent = "저장되었습니다. 출고증은 인쇄 PC에서 곧 나옵니다." + ((res.건너뜀 || []).length ? " (이미 출고된 " + res.건너뜀.length + "개는 제외됨)" : "");
     $("doneUndo").style.display = "";
   } else {
     ls.set("lastShip", null);
-    $("doneId").textContent = "전송 대기"; $("doneInfo").textContent = `파렛트 ${n}개 · 철 ${iron}개`;
+    $("doneId").textContent = "전송 대기"; $("doneInfo").textContent = `파렛트 ${n}개 (${ks3})`;
     $("doneMsg").textContent = "신호가 약해 휴대폰에 저장했습니다. 연결되면 자동으로 올라가고, 그 뒤에 출고증이 인쇄됩니다.";
     $("doneUndo").style.display = "none";
   }
