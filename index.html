@@ -75,7 +75,7 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
 <section id="home" class="screen on">
   <div class="pad">
     <h1>파렛트 스캔</h1>
-    <p class="hint">누가 쓰는 휴대폰인지 고르세요. 기록에 이 이름이 남습니다.</p>
+    <p class="hint">할 작업을 고르세요.</p>
     <button class="big pack" data-mode="포장">포장</button>
     <button class="big ship" data-mode="출고">출고</button>
     <div id="homeNet" class="hint"></div>
@@ -648,7 +648,7 @@ $("fSave").onclick = async () => {
   if (res){
     ls.set("lastShip", {id:res.출고번호, n:res.개수});
     $("doneId").textContent = res.출고번호; $("doneInfo").textContent = `파렛트 ${res.개수}개 (${ks3}) · ${res.현장 || ""}`;
-    $("doneMsg").textContent = "저장되었습니다. 출고증은 인쇄 PC에서 곧 나옵니다." + ((res.건너뜀 || []).length ? " (이미 출고된 " + res.건너뜀.length + "개는 제외됨)" : "");
+    $("doneMsg").textContent = "저장되었습니다. 출고증은 인쇄 PC 화면에 곧 열립니다." + ((res.건너뜀 || []).length ? " (이미 출고된 " + res.건너뜀.length + "개는 제외됨)" : "");
     $("doneUndo").style.display = "";
   } else {
     ls.set("lastShip", null);
