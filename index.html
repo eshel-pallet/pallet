@@ -166,7 +166,6 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
       <label class="lab">차량번호 (필수)</label><input type="text" id="dPlate" placeholder="예: 경기95자6180" autocomplete="off">
       <label class="lab">기사 이름</label><input type="text" id="dName" autocomplete="off">
       <label class="lab">전화번호</label><input type="tel" id="dPhone" placeholder="010-0000-0000" autocomplete="off">
-      <div class="chips" id="dRecent"></div>
       <div id="phBox2"></div>
       <div class="hint">상차 사진은 1장 이상 필요합니다 (최대 5장). 겹쳐 싣는 파렛트는 싣기 전에 미리 찍어도 됩니다.</div>
       <div class="row stick">
@@ -694,12 +693,6 @@ $("fBack").onclick = () => { shipStage = "scan"; document.body.classList.remove(
 function drawFin(){
   const ks2 = kindSum(ship.items);
   $("fSum").textContent = `파렛트 ${ship.items.length}개` + (ks2 ? ` (${ks2})` : "");
-  const rc = $("dRecent"); rc.innerHTML = "";
-  ls.get("drivers", []).forEach(d => {
-    const c = document.createElement("div"); c.className = "chip"; c.innerHTML = `${d.plate}<i>${d.name || ""}</i>`;
-    c.onclick = () => { $("dPlate").value = d.plate; $("dName").value = d.name || ""; $("dPhone").value = d.phone || ""; $("dPlate").oninput(); };
-    rc.appendChild(c);
-  });
   renderPhotos();
   const pc2 = photoCount(), b = $("fSave"), ok = !!ship.driver.plate && pc2.n > 0 && pc2.up === pc2.n;
   b.disabled = !ok;
@@ -715,7 +708,6 @@ $("fSave").onclick = async () => {
     if (e.server){ toast(e.message, "bad"); drawFin(); return; }
     setNet(false); enqueue(payload);                       // 신호가 약하면 휴대폰에 저장해 두었다가 자동 전송
   }
-  const d = ship.driver; const dr = ls.get("drivers", []).filter(x => x.plate !== d.plate); dr.unshift(d); ls.set("drivers", dr.slice(0, 8));
   const n = ship.items.length, ks3 = kindSum(ship.items);
   const oldPh = ship.photos.map(p => ship.cid + ":" + p.n);
   ship = {items:[], plan:"", cid:"", driver:{name:"", plate:"", phone:""}, photos:[]}; saveShip(); $("planIn").value = ""; oldPh.forEach(k => { idb.del(k); delete thumbCache[k]; });
