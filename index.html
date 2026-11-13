@@ -216,7 +216,7 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
 <script>
 "use strict";
 const API = "https://script.google.com/macros/s/AKfycbzG5zBEqGenvl0y2aaXL1hvMPBDENRQwCbYi6Y4LwnFS9R8Jl22zl4NM5JfOw6m9t42/exec";
-const APP_VER = "1.1", APP_DATE = "2026.11.13";
+const APP_VER = "1.2", APP_DATE = "2026.11.13";
 const TYPES = ["철","작은나무","큰나무","폭좁은나무","기타"];
 const KEY_RE = /^\d{2}-\d{4}-\d{4}-\d{2}\|\d+(-\d+)?$/;
 const $ = id => document.getElementById(id);
@@ -322,13 +322,65 @@ async function openPack(){
 }
 
 // ---------------------------------------------------------------- 카메라 / QR 읽기
+// ---- 아이폰용 QR 해독 (인쇄 줄무늬 대응): zbar + jsQR, 흑백 변환 여러 단계
+const DEC = {zbar:null, msg:"", loading:null};
+async function loadDecoders(){
+  if (DEC.loading) return DEC.loading;
+  DEC.loading = (async () => {
+    const zs = ["https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs", "https://fastly.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs", "https://unpkg.com/@undecaf/zbar-wasm@0.11.0/dist/index.mjs"];
+    for (const u of zs){ try{ DEC.zbar = await import(u); break; }catch(e){} }
+    if (!window.jsQR){
+      for (const u of ["https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js", "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"]){
+        try{ await new Promise((res, rej) => { const s = document.createElement("script"); s.src = u; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); if (window.jsQR) break; }catch(e){}
+      }
+    }
+    DEC.msg = (DEC.zbar ? "zbar " : "") + (window.jsQR ? "jsQR" : "");
+  })();
+  return DEC.loading;
+}
+function decOk(){ return !!(DEC.zbar || window.jsQR); }
+function binarize(d, off, open){
+  const w = d.width, h = d.height, n = w * h, g = new Uint8Array(n), hist = new Array(256).fill(0), p = d.data;
+  for (let i = 0; i < n; i++){ const v = (p[4*i] * 77 + p[4*i+1] * 150 + p[4*i+2] * 29) >> 8; g[i] = v; hist[v]++; }
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let wB = 0, sB = 0, best = 0, th = 128;
+  for (let i = 0; i < 256; i++){ wB += hist[i]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / wF, bt = wB * wF * (mB - mF) * (mB - mF); if (bt > best){ best = bt; th = i; } }
+  const t = Math.max(30, Math.min(230, th + off));
+  let b = new Uint8Array(n); for (let i = 0; i < n; i++) b[i] = g[i] > t ? 255 : 0;
+  if (open){                       // 잡티/줄무늬 제거: 3x3 침식 후 팽창(검은 점 기준)
+    const e = new Uint8Array(n), o = new Uint8Array(n);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ let m = 0; for (let dy = -1; dy <= 1; dy++){ const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -1; dx <= 1; dx++){ const xx = x + dx; if (xx < 0 || xx >= w) continue; if (b[yy*w+xx] > m) m = b[yy*w+xx]; } } e[y*w+x] = m; }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ let m = 255; for (let dy = -1; dy <= 1; dy++){ const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -1; dx <= 1; dx++){ const xx = x + dx; if (xx < 0 || xx >= w) continue; if (e[yy*w+xx] < m) m = e[yy*w+xx]; } } o[y*w+x] = m; }
+    b = o;
+  }
+  const out = new Uint8ClampedArray(n * 4);
+  for (let i = 0; i < n; i++){ out[4*i] = out[4*i+1] = out[4*i+2] = b[i]; out[4*i+3] = 255; }
+  return new ImageData(out, w, h);
+}
+const VARIANTS = [[0, 0, 0], [1, 25, 0], [1, 10, 0], [1, 45, 0], [1, 25, 1]];   // [흑백화?, 기준 가산, 잡티제거?]
+async function decodeVariant(d, vi){
+  const [bin, off, open] = VARIANTS[vi % VARIANTS.length];
+  const img = bin ? binarize(d, off, open) : d;
+  if (DEC.zbar){
+    try{
+      const s = await DEC.zbar.scanImageData(img);
+      if (s && s.length){ const q = s[0]; const t = q.decode ? q.decode() : new TextDecoder().decode(q.data); if (t) return t; }
+    }catch(e){}
+  }
+  if (window.jsQR){
+    try{ const r = jsQR(img.data, img.width, img.height, {inversionAttempts: bin ? "dontInvert" : "attemptBoth"}); if (r && r.data) return r.data; }catch(e){}
+  }
+  return "";
+}
+
 async function startCam(){
   $("camMsg").textContent = "카메라를 켜는 중...";
   try{
     stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}, width:{ideal:1280}, height:{ideal:1280}}, audio:false});
     const v = $("video"); v.srcObject = stream; await v.play();
     if ("BarcodeDetector" in window){ try{ detector = new BarcodeDetector({formats:["qr_code"]}); }catch(e){ detector = null; } }
-    scanning = true; $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요" + (detector ? "" : (window.jsQR ? " (보조 읽기)" : " (읽기 부품을 불러오지 못했습니다 - 인터넷 확인)"));
+    if (!detector){ $("camMsg").textContent = "읽기 부품을 불러오는 중..."; await loadDecoders(); }
+    scanning = true; $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요" + (detector ? "" : (decOk() ? " (보조 읽기: " + DEC.msg + ")" : " (읽기 부품을 불러오지 못했습니다 - 인터넷 확인 후 앱을 다시 여세요)"));
     $("photoBtn").style.display = detector ? "none" : "block";      // 아이폰 등: 사진으로 읽기 버튼
     loop();
   }catch(e){
@@ -366,7 +418,7 @@ async function loop(){
       let text = "";
       if (detector){
         const r = await detector.detect(v); if (r.length) text = r[0].rawValue;
-      } else if (window.jsQR){
+      } else if (decOk()){
         // 아이폰처럼 기본 QR 읽기 기능이 없는 폰: 보조 읽기. 프레임마다 방식을 바꿔 가며 시도한다
         tries++;
         const vw = v.videoWidth, vh = v.videoHeight;
@@ -374,7 +426,7 @@ async function loop(){
         if (tries % 2 === 0){ sw = Math.round(vw * 0.62); sh = Math.round(vh * 0.62); sx = Math.round((vw - sw) / 2); sy = Math.round((vh - sh) / 2); out = Math.min(sw, 1000); }
         const w = out, h = Math.round(sh * w / sw);
         cv.width = w; cv.height = h; cx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
-        const r = jsQR(cx.getImageData(0, 0, w, h).data, w, h, {inversionAttempts: tries % 4 === 0 ? "attemptBoth" : "dontInvert"}); if (r) text = r.data;
+        text = await decodeVariant(cx.getImageData(0, 0, w, h), tries >> 1);
         if (tries % 10 === 0) $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요 (보조 읽기 · " + vw + "x" + vh + " · " + tries + "회)";
       }
       if (text) onCode(text);
@@ -392,7 +444,7 @@ function loadImg(file){
     im.src = u;
   });
 }
-function findQrIn(img){
+async function findQrIn(img){
   const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
   const c = document.createElement("canvas"), x = c.getContext("2d", {willReadFrequently:true});
   const plans = [];
@@ -403,19 +455,20 @@ function findQrIn(img){
   for (const [m, sx, sy, sw, sh] of plans){
     const k = Math.min(1, m / Math.max(sw, sh)), w = Math.round(sw * k), h = Math.round(sh * k);
     c.width = w; c.height = h; x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-    const r = jsQR(x.getImageData(0, 0, w, h).data, w, h, {inversionAttempts:"attemptBoth"});
-    if (r && r.data) return r.data;
+    const d = x.getImageData(0, 0, w, h);
+    for (let vi = 0; vi < VARIANTS.length; vi++){ const t = await decodeVariant(d, vi); if (t) return t; }
   }
   return "";
 }
 async function readStill(file){
   if (!file) return;
-  if (!window.jsQR){ toast("읽기 부품을 불러오지 못했습니다 - 인터넷 확인", "bad"); return; }
   toast("사진에서 QR을 찾는 중...");
+  await loadDecoders();
+  if (!decOk()){ toast("읽기 부품을 불러오지 못했습니다 - 인터넷 확인", "bad"); return; }
   try{
     const img = await loadImg(file);
     await new Promise(r => setTimeout(r, 30));
-    const text = findQrIn(img);
+    const text = await findQrIn(img);
     if (text) onCode(text);
     else { beep(false); toast("사진에서 QR을 찾지 못했습니다. QR이 크게 나오도록 가까이서, 밝게 다시 찍어 주세요", "bad"); }
   }catch(e){ toast("사진 읽기 오류: " + (e.message || e.name), "bad"); }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>QR 읽기 시험</title>
+<title>QR 읽기 시험 v2</title>
 <style>
 body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#111;color:#eee;font-size:15px}
 h1{font-size:18px;margin:0;padding:12px 14px;background:#1f3864}
@@ -19,7 +19,7 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:12.5px;line-height:1.5;b
 </style>
 </head>
 <body>
-<h1>QR 읽기 시험 (아이폰 확인용)</h1>
+<h1>QR 읽기 시험 v2 (아이폰 확인용)</h1>
 <div class="pad">
   <div class="hint">1) 「카메라 시작」을 누르고 카메라 사용을 허용합니다. 2) 파렛트 QR을 비춥니다. 3) 아래 화면 전체를 캡처해서 보내 주세요.</div>
   <button id="go">카메라 시작</button>
@@ -34,14 +34,60 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:12.5px;line-height:1.5;b
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
-<script type="module">
-// 선택 부품(zbar): 불러오지 못해도 시험은 계속된다
-try{
-  const m = await import("https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs");
-  window.__zbar = m; window.__zbarMsg = "불러옴";
-}catch(e){ window.__zbarMsg = "불러오지 못함 (" + (e && e.message || e) + ")"; }
-</script>
+
 <script>
+// ---- 아이폰용 QR 해독 (인쇄 줄무늬 대응): zbar + jsQR, 흑백 변환 여러 단계
+const DEC = {zbar:null, msg:"", loading:null};
+async function loadDecoders(){
+  if (DEC.loading) return DEC.loading;
+  DEC.loading = (async () => {
+    const zs = ["https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs", "https://fastly.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs", "https://unpkg.com/@undecaf/zbar-wasm@0.11.0/dist/index.mjs"];
+    for (const u of zs){ try{ DEC.zbar = await import(u); break; }catch(e){} }
+    if (!window.jsQR){
+      for (const u of ["https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js", "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"]){
+        try{ await new Promise((res, rej) => { const s = document.createElement("script"); s.src = u; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); if (window.jsQR) break; }catch(e){}
+      }
+    }
+    DEC.msg = (DEC.zbar ? "zbar " : "") + (window.jsQR ? "jsQR" : "");
+  })();
+  return DEC.loading;
+}
+function decOk(){ return !!(DEC.zbar || window.jsQR); }
+function binarize(d, off, open){
+  const w = d.width, h = d.height, n = w * h, g = new Uint8Array(n), hist = new Array(256).fill(0), p = d.data;
+  for (let i = 0; i < n; i++){ const v = (p[4*i] * 77 + p[4*i+1] * 150 + p[4*i+2] * 29) >> 8; g[i] = v; hist[v]++; }
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let wB = 0, sB = 0, best = 0, th = 128;
+  for (let i = 0; i < 256; i++){ wB += hist[i]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / wF, bt = wB * wF * (mB - mF) * (mB - mF); if (bt > best){ best = bt; th = i; } }
+  const t = Math.max(30, Math.min(230, th + off));
+  let b = new Uint8Array(n); for (let i = 0; i < n; i++) b[i] = g[i] > t ? 255 : 0;
+  if (open){                       // 잡티/줄무늬 제거: 3x3 침식 후 팽창(검은 점 기준)
+    const e = new Uint8Array(n), o = new Uint8Array(n);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ let m = 0; for (let dy = -1; dy <= 1; dy++){ const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -1; dx <= 1; dx++){ const xx = x + dx; if (xx < 0 || xx >= w) continue; if (b[yy*w+xx] > m) m = b[yy*w+xx]; } } e[y*w+x] = m; }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ let m = 255; for (let dy = -1; dy <= 1; dy++){ const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -1; dx <= 1; dx++){ const xx = x + dx; if (xx < 0 || xx >= w) continue; if (e[yy*w+xx] < m) m = e[yy*w+xx]; } } o[y*w+x] = m; }
+    b = o;
+  }
+  const out = new Uint8ClampedArray(n * 4);
+  for (let i = 0; i < n; i++){ out[4*i] = out[4*i+1] = out[4*i+2] = b[i]; out[4*i+3] = 255; }
+  return new ImageData(out, w, h);
+}
+const VARIANTS = [[0, 0, 0], [1, 25, 0], [1, 10, 0], [1, 45, 0], [1, 25, 1]];   // [흑백화?, 기준 가산, 잡티제거?]
+async function decodeVariant(d, vi){
+  const [bin, off, open] = VARIANTS[vi % VARIANTS.length];
+  const img = bin ? binarize(d, off, open) : d;
+  if (DEC.zbar){
+    try{
+      const s = await DEC.zbar.scanImageData(img);
+      if (s && s.length){ const q = s[0]; const t = q.decode ? q.decode() : new TextDecoder().decode(q.data); if (t) return t; }
+    }catch(e){}
+  }
+  if (window.jsQR){
+    try{ const r = jsQR(img.data, img.width, img.height, {inversionAttempts: bin ? "dontInvert" : "attemptBoth"}); if (r && r.data) return r.data; }catch(e){}
+  }
+  return "";
+}
+
+loadDecoders().then(()=>{window.__zbarMsg=DEC.zbar?"불러옴":"못 불러옴";});
 const $ = id => document.getElementById(id);
 const S = {t0: Date.now(), gum: "아직 안 함", track: "", frames: 0, jsqrMs: 0, jsqrN: 0, zbarMs: 0, zbarN: 0, last: null, vinfo: ""};
 const logs = [];
@@ -90,23 +136,19 @@ function loop(){
   }
   setTimeout(loop, 120);
 }
-let zbusy = false;
+let zi = 0;
 async function zloop(){
   if (!running) return;
-  if (window.__zbar && !zbusy){
+  if (decOk()){
     const img = grab();
     if (img){
-      zbusy = true;
       const t = performance.now();
-      try{
-        const syms = await window.__zbar.scanImageData(img);
-        S.zbarMs += performance.now() - t; S.zbarN++;
-        if (syms && syms.length){ const s = syms[0]; found("zbar", s.decode ? s.decode() : String(s.data), "화면"); }
-      }catch(e){ log("zbar 오류 " + (e.message || e)); }
-      zbusy = false;
+      const r = await decodeVariant(img, zi++);
+      S.zbarMs += performance.now() - t; S.zbarN++;
+      if (r) found("해독(방식" + ((zi - 1) % VARIANTS.length) + ")", r, "화면");
     }
   }
-  setTimeout(zloop, 150);
+  setTimeout(zloop, 100);
 }
 
 // 사진으로 읽기: 전체/가운데 확대를 여러 크기로 시도
@@ -119,16 +161,15 @@ async function still(file){
     const c = document.createElement("canvas"), x = c.getContext("2d", {willReadFrequently: true});
     const plans = [[1600, 0, 0, W, H], [1100, 0, 0, W, H], [700, 0, 0, W, H]];
     [[0.6, 1100], [0.4, 800]].forEach(([f, m]) => { const w = Math.round(W * f), h = Math.round(H * f); plans.push([m, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h]); });
-    let okJ = false, okZ = false;
+    await loadDecoders(); let ok = false;
     for (const [m, sx, sy, sw, sh] of plans){
       const k = Math.min(1, m / Math.max(sw, sh)), w = Math.round(sw * k), h = Math.round(sh * k);
       c.width = w; c.height = h; x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
       const d = x.getImageData(0, 0, w, h);
-      if (!okJ && window.jsQR){ const r = jsQR(d.data, w, h, {inversionAttempts: "attemptBoth"}); if (r && r.data){ okJ = true; found("jsQR", r.data, "사진 " + w + "x" + h); } }
-      if (!okZ && window.__zbar){ try{ const s = await window.__zbar.scanImageData(d); if (s && s.length){ okZ = true; found("zbar", s[0].decode ? s[0].decode() : String(s[0].data), "사진 " + w + "x" + h); } }catch(e){ log("zbar 오류 " + e.message); } }
-      if (okJ && (okZ || !window.__zbar)) break;
+      for (let vi = 0; vi < VARIANTS.length && !ok; vi++){ const r = await decodeVariant(d, vi); if (r){ ok = true; found("해독(방식" + vi + ")", r, "사진 " + w + "x" + h); } }
+      if (ok) break;
     }
-    log("사진 " + W + "x" + H + " 결과: jsQR " + (okJ ? "읽힘" : "못찾음") + " / zbar " + (window.__zbar ? (okZ ? "읽힘" : "못찾음") : "없음"));
+    log("사진 " + W + "x" + H + " 결과: " + (ok ? "읽힘" : "못찾음"));
   }catch(e){ log("사진 오류 " + e.message); }
 }
 $("go").onclick = start;
