@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QR 읽기 시험</title>
+<style>
+body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#111;color:#eee;font-size:15px}
+h1{font-size:18px;margin:0;padding:12px 14px;background:#1f3864}
+.pad{padding:10px 14px}
+button{font-size:17px;padding:12px 16px;border-radius:10px;border:0;background:#2f5597;color:#fff;margin:4px 6px 4px 0}
+button.alt{background:#555}
+.cam{position:relative;background:#000;width:100%;max-height:42vh;overflow:hidden}
+video{width:100%;max-height:42vh;object-fit:contain;display:block;background:#000}
+.res{margin:10px 0;padding:12px;border-radius:10px;background:#222;font-size:16px;word-break:break-all}
+.res.ok{background:#1b5e20}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12.5px;line-height:1.5;background:#1b1b1b;padding:10px;border-radius:8px;margin:8px 0}
+.hint{color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<h1>QR 읽기 시험 (아이폰 확인용)</h1>
+<div class="pad">
+  <div class="hint">1) 「카메라 시작」을 누르고 카메라 사용을 허용합니다. 2) 파렛트 QR을 비춥니다. 3) 아래 화면 전체를 캡처해서 보내 주세요.</div>
+  <button id="go">카메라 시작</button>
+  <button id="photoBtn" class="alt">사진으로 읽기</button>
+  <input type="file" id="photoIn" accept="image/*" capture="environment" style="display:none">
+</div>
+<div class="cam"><video id="v" playsinline muted autoplay></video></div>
+<div class="pad">
+  <div class="res" id="res">아직 읽힌 QR이 없습니다</div>
+  <pre id="st">준비 중...</pre>
+  <pre id="log"></pre>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script type="module">
+// 선택 부품(zbar): 불러오지 못해도 시험은 계속된다
+try{
+  const m = await import("https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/index.mjs");
+  window.__zbar = m; window.__zbarMsg = "불러옴";
+}catch(e){ window.__zbarMsg = "불러오지 못함 (" + (e && e.message || e) + ")"; }
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const S = {t0: Date.now(), gum: "아직 안 함", track: "", frames: 0, jsqrMs: 0, jsqrN: 0, zbarMs: 0, zbarN: 0, last: null, vinfo: ""};
+const logs = [];
+function log(m){ logs.unshift(new Date().toLocaleTimeString() + " " + m); logs.length = Math.min(logs.length, 14); $("log").textContent = logs.join("\n"); }
+let stream = null, running = false;
+const cv = document.createElement("canvas"), cx = cv.getContext("2d", {willReadFrequently: true});
+
+function found(engine, text, src){
+  S.last = {engine, text, at: new Date().toLocaleTimeString(), src};
+  $("res").className = "res ok";
+  $("res").textContent = "읽힘 [" + engine + "/" + src + "] " + text;
+  log("읽힘 " + engine + " " + src + ": " + text);
+}
+
+async function start(){
+  log("카메라 요청");
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 1280}}, audio: false});
+    S.gum = "성공";
+    const tr = stream.getVideoTracks()[0], st = tr.getSettings ? tr.getSettings() : {};
+    S.track = (tr.label || "(이름없음)") + " " + (st.width || "?") + "x" + (st.height || "?") + " @" + (st.frameRate || "?");
+    $("v").srcObject = stream; await $("v").play();
+    running = true; loop(); zloop();
+  }catch(e){
+    S.gum = "실패: " + (e.name || "") + " " + (e.message || "");
+    log("카메라 실패 " + S.gum);
+  }
+}
+function grab(){
+  const v = $("v"); if (!v.videoWidth || v.readyState < 2) return null;
+  const w = Math.min(v.videoWidth, 1280), h = Math.round(v.videoHeight * w / v.videoWidth);
+  cv.width = w; cv.height = h; cx.drawImage(v, 0, 0, w, h);
+  return cx.getImageData(0, 0, w, h);
+}
+let tick = 0;
+function loop(){
+  if (!running) return;
+  const img = grab();
+  if (img && window.jsQR){
+    S.frames++; tick++;
+    const t = performance.now();
+    let r = null;
+    try{ r = jsQR(img.data, img.width, img.height, {inversionAttempts: tick % 3 === 0 ? "attemptBoth" : "dontInvert"}); }catch(e){ log("jsQR 오류 " + e.message); }
+    S.jsqrMs += performance.now() - t; S.jsqrN++;
+    if (r && r.data) found("jsQR", r.data, "화면");
+  }
+  setTimeout(loop, 120);
+}
+let zbusy = false;
+async function zloop(){
+  if (!running) return;
+  if (window.__zbar && !zbusy){
+    const img = grab();
+    if (img){
+      zbusy = true;
+      const t = performance.now();
+      try{
+        const syms = await window.__zbar.scanImageData(img);
+        S.zbarMs += performance.now() - t; S.zbarN++;
+        if (syms && syms.length){ const s = syms[0]; found("zbar", s.decode ? s.decode() : String(s.data), "화면"); }
+      }catch(e){ log("zbar 오류 " + (e.message || e)); }
+      zbusy = false;
+    }
+  }
+  setTimeout(zloop, 150);
+}
+
+// 사진으로 읽기: 전체/가운데 확대를 여러 크기로 시도
+function loadImg(file){ return new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => { URL.revokeObjectURL(u); res(im); }; im.onerror = () => rej(new Error("사진 열기 실패")); im.src = u; }); }
+async function still(file){
+  if (!file) return;
+  log("사진 읽는 중 " + Math.round(file.size / 1024) + "KB");
+  try{
+    const img = await loadImg(file), W = img.naturalWidth, H = img.naturalHeight;
+    const c = document.createElement("canvas"), x = c.getContext("2d", {willReadFrequently: true});
+    const plans = [[1600, 0, 0, W, H], [1100, 0, 0, W, H], [700, 0, 0, W, H]];
+    [[0.6, 1100], [0.4, 800]].forEach(([f, m]) => { const w = Math.round(W * f), h = Math.round(H * f); plans.push([m, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h]); });
+    let okJ = false, okZ = false;
+    for (const [m, sx, sy, sw, sh] of plans){
+      const k = Math.min(1, m / Math.max(sw, sh)), w = Math.round(sw * k), h = Math.round(sh * k);
+      c.width = w; c.height = h; x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      const d = x.getImageData(0, 0, w, h);
+      if (!okJ && window.jsQR){ const r = jsQR(d.data, w, h, {inversionAttempts: "attemptBoth"}); if (r && r.data){ okJ = true; found("jsQR", r.data, "사진 " + w + "x" + h); } }
+      if (!okZ && window.__zbar){ try{ const s = await window.__zbar.scanImageData(d); if (s && s.length){ okZ = true; found("zbar", s[0].decode ? s[0].decode() : String(s[0].data), "사진 " + w + "x" + h); } }catch(e){ log("zbar 오류 " + e.message); } }
+      if (okJ && (okZ || !window.__zbar)) break;
+    }
+    log("사진 " + W + "x" + H + " 결과: jsQR " + (okJ ? "읽힘" : "못찾음") + " / zbar " + (window.__zbar ? (okZ ? "읽힘" : "못찾음") : "없음"));
+  }catch(e){ log("사진 오류 " + e.message); }
+}
+$("go").onclick = start;
+$("photoBtn").onclick = () => $("photoIn").click();
+$("photoIn").onchange = e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; still(f); };
+
+setInterval(() => {
+  const v = $("v");
+  $("st").textContent = [
+    "기기: " + navigator.userAgent,
+    "BarcodeDetector(기본 QR 읽기): " + ("BarcodeDetector" in window ? "있음" : "없음"),
+    "jsQR 부품: " + (window.jsQR ? "불러옴" : "못 불러옴"),
+    "zbar 부품: " + (window.__zbarMsg || "불러오는 중"),
+    "카메라 요청: " + S.gum,
+    "카메라 정보: " + (S.track || "-"),
+    "화면: " + v.videoWidth + "x" + v.videoHeight + " · 상태 " + v.readyState + " · 멈춤 " + v.paused + " · 시간 " + v.currentTime.toFixed(1),
+    "jsQR 시도 " + S.jsqrN + "회, 평균 " + (S.jsqrN ? Math.round(S.jsqrMs / S.jsqrN) : "-") + "ms",
+    "zbar 시도 " + S.zbarN + "회, 평균 " + (S.zbarN ? Math.round(S.zbarMs / S.zbarN) : "-") + "ms",
+    "마지막 읽힘: " + (S.last ? S.last.engine + " " + S.last.src + " " + S.last.at : "없음"),
+    "경과: " + Math.round((Date.now() - S.t0) / 1000) + "초"
+  ].join("\n");
+}, 500);
+window.addEventListener("error", e => log("오류 " + e.message));
+</script>
+</body>
+</html>
