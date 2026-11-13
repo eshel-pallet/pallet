@@ -53,9 +53,16 @@ async function loadDecoders(){
   return DEC.loading;
 }
 function decOk(){ return !!(DEC.zbar || window.jsQR); }
-function binarize(d, off, open){
+function binarize(d, off, open, vr){
   const w = d.width, h = d.height, n = w * h, g = new Uint8Array(n), hist = new Array(256).fill(0), p = d.data;
-  for (let i = 0; i < n; i++){ const v = (p[4*i] * 77 + p[4*i+1] * 150 + p[4*i+2] * 29) >> 8; g[i] = v; hist[v]++; }
+  for (let i = 0; i < n; i++) g[i] = (p[4*i] * 77 + p[4*i+1] * 150 + p[4*i+2] * 29) >> 8;
+  if (vr){                         // 세로로 번지게(가로 줄무늬를 뭉개는 효과): 세로 평균
+    const g2 = new Uint8Array(n);
+    for (let x = 0; x < w; x++){ let acc = 0, cnt = 0; for (let y = 0; y <= vr && y < h; y++){ acc += g[y*w+x]; cnt++; }
+      for (let y = 0; y < h; y++){ g2[y*w+x] = acc / cnt; const add = y + vr + 1, rem = y - vr; if (add < h){ acc += g[add*w+x]; cnt++; } if (rem >= 0){ acc -= g[rem*w+x]; cnt--; } } }
+    g.set(g2);
+  }
+  for (let i = 0; i < n; i++) hist[g[i]]++;
   let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
   let wB = 0, sB = 0, best = 0, th = 128;
   for (let i = 0; i < 256; i++){ wB += hist[i]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / wF, bt = wB * wF * (mB - mF) * (mB - mF); if (bt > best){ best = bt; th = i; } }
@@ -71,12 +78,12 @@ function binarize(d, off, open){
   for (let i = 0; i < n; i++){ out[4*i] = out[4*i+1] = out[4*i+2] = b[i]; out[4*i+3] = 255; }
   return new ImageData(out, w, h);
 }
-const VARIANTS = [[1, 25, 0, 1], [0, 0, 0, 1], [1, 45, 0, 1], [1, 25, 1, 1], [1, 10, 0, 1], [1, 25, 0, 0.6], [1, 40, 0, 0.6]];   // [흑백화?, 기준 가산, 잡티제거?, 축소배율]
+const VARIANTS = [[1, 25, 0, 1, 0], [1, 25, 0, 1, 3], [0, 0, 0, 1, 0], [1, 25, 0, 1, 7], [1, 45, 0, 1, 0], [1, 10, 0, 1, 3], [1, 25, 1, 1, 0], [1, 25, 0, 0.6, 0], [1, 40, 0, 0.6, 2], [1, 40, 0, 1, 5]];   // [흑백화?, 기준 가산, 잡티제거?, 축소배율, 세로번짐]   // [흑백화?, 기준 가산, 잡티제거?, 축소배율]
 const _sc = document.createElement("canvas"), _sx = _sc.getContext("2d", {willReadFrequently:true}), _sc2 = document.createElement("canvas"), _sx2 = _sc2.getContext("2d", {willReadFrequently:true});
 function shrinkData(d, k){ if (k >= 1) return d; _sc.width = d.width; _sc.height = d.height; _sx.putImageData(d, 0, 0); const w = Math.round(d.width * k), h = Math.round(d.height * k); _sc2.width = w; _sc2.height = h; _sx2.drawImage(_sc, 0, 0, w, h); return _sx2.getImageData(0, 0, w, h); }
 async function decodeVariant(d, vi){
-  const [bin, off, open, k] = VARIANTS[vi % VARIANTS.length];
-  const base = shrinkData(d, k), img = bin ? binarize(base, off, open) : base;
+  const [bin, off, open, k, vr] = VARIANTS[vi % VARIANTS.length];
+  const base = shrinkData(d, k), img = bin ? binarize(base, off, open, vr) : base;
   if (DEC.zbar){
     try{
       const s = await DEC.zbar.scanImageData(img);
