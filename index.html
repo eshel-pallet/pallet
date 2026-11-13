@@ -36,6 +36,7 @@ h1{font-size:22px;margin:0}
 .cam{position:relative;background:#000;aspect-ratio:1/1;max-height:40vh;transition:max-height .2s;width:100%;overflow:hidden}
 .cam video{width:100%;height:100%;object-fit:cover}
 .cam .aim{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.75);border-radius:18px;pointer-events:none}
+.cam .photoBtn{position:absolute;top:8px;right:8px;z-index:3;background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.7);border-radius:20px;padding:7px 12px;font-size:14px;display:none}
 .cam .msg{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:15px;color:#fff;text-shadow:0 1px 3px #000}
 .working .cam{max-height:15vh}
 .working .cam .msg{display:none}
@@ -119,6 +120,8 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
     <video id="video" playsinline muted></video>
     <div class="aim"></div>
     <div class="msg" id="camMsg">QR을 네모 안에 맞춰 주세요</div>
+    <button class="photoBtn" id="photoBtn" type="button">📷 사진으로 읽기</button>
+    <input type="file" id="photoIn" accept="image/*" capture="environment" style="display:none">
   </div>
   <div class="pad" id="panel">
     <div id="idle">
@@ -213,7 +216,7 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
 <script>
 "use strict";
 const API = "https://script.google.com/macros/s/AKfycbzG5zBEqGenvl0y2aaXL1hvMPBDENRQwCbYi6Y4LwnFS9R8Jl22zl4NM5JfOw6m9t42/exec";
-const APP_VER = "1.0", APP_DATE = "2026.11.04";
+const APP_VER = "1.1", APP_DATE = "2026.11.13";
 const TYPES = ["철","작은나무","큰나무","폭좁은나무","기타"];
 const KEY_RE = /^\d{2}-\d{4}-\d{4}-\d{2}\|\d+(-\d+)?$/;
 const $ = id => document.getElementById(id);
@@ -326,9 +329,11 @@ async function startCam(){
     const v = $("video"); v.srcObject = stream; await v.play();
     if ("BarcodeDetector" in window){ try{ detector = new BarcodeDetector({formats:["qr_code"]}); }catch(e){ detector = null; } }
     scanning = true; $("camMsg").textContent = "QR을 네모 안에 맞춰 주세요" + (detector ? "" : (window.jsQR ? " (보조 읽기)" : " (읽기 부품을 불러오지 못했습니다 - 인터넷 확인)"));
+    $("photoBtn").style.display = detector ? "none" : "block";      // 아이폰 등: 사진으로 읽기 버튼
     loop();
   }catch(e){
     scanning = false;
+    $("photoBtn").style.display = "block";
     $("camMsg").textContent = "카메라를 쓸 수 없습니다. 아래 '번호 직접 입력'을 쓰세요 (" + (e.name || "오류") + ")";
   }
 }
@@ -348,7 +353,8 @@ function camDead(){
   if (!tr || tr.readyState !== "live") return true;
   if (v.paused) return true;
   if (v.currentTime !== lastT){ lastT = v.currentTime; lastTAt = Date.now(); return false; }
-  return Date.now() - lastTAt > 2500;           // 2.5초 넘게 화면이 안 움직이면 멈춘 것
+  if (detector) return Date.now() - lastTAt > 2500;           // 2.5초 넘게 화면이 안 움직이면 멈춘 것
+  return Date.now() - lastTAt > 2500 && v.readyState < 2;     // 아이폰: 시간 값이 안 올라가도 화면이 들어오면 멈춘 게 아니다
 }
 const cv = document.createElement("canvas"), cx = cv.getContext("2d", {willReadFrequently:true});
 async function loop(){
@@ -376,6 +382,46 @@ async function loop(){
   }
   setTimeout(loop, detector ? 50 : 120);
 }
+
+// ---------------------------------------------------------------- 사진으로 읽기 (아이폰: 카메라로 한 장 찍어 그 사진에서 QR을 찾는다)
+function loadImg(file){
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { URL.revokeObjectURL(u); res(im); };
+    im.onerror = () => { URL.revokeObjectURL(u); rej(new Error("사진을 열지 못했습니다")); };
+    im.src = u;
+  });
+}
+function findQrIn(img){
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+  const c = document.createElement("canvas"), x = c.getContext("2d", {willReadFrequently:true});
+  const plans = [];
+  [1600, 1100, 700].forEach(m => { plans.push([m, 0, 0, W, H]); });                       // 전체 사진을 3가지 크기로
+  [[0.6, 1100], [0.4, 800]].forEach(([f, m]) => {                                        // 가운데 부분만 확대해서
+    const w = Math.round(W * f), h = Math.round(H * f); plans.push([m, Math.round((W - w) / 2), Math.round((H - h) / 2), w, h]);
+  });
+  for (const [m, sx, sy, sw, sh] of plans){
+    const k = Math.min(1, m / Math.max(sw, sh)), w = Math.round(sw * k), h = Math.round(sh * k);
+    c.width = w; c.height = h; x.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    const r = jsQR(x.getImageData(0, 0, w, h).data, w, h, {inversionAttempts:"attemptBoth"});
+    if (r && r.data) return r.data;
+  }
+  return "";
+}
+async function readStill(file){
+  if (!file) return;
+  if (!window.jsQR){ toast("읽기 부품을 불러오지 못했습니다 - 인터넷 확인", "bad"); return; }
+  toast("사진에서 QR을 찾는 중...");
+  try{
+    const img = await loadImg(file);
+    await new Promise(r => setTimeout(r, 30));
+    const text = findQrIn(img);
+    if (text) onCode(text);
+    else { beep(false); toast("사진에서 QR을 찾지 못했습니다. QR이 크게 나오도록 가까이서, 밝게 다시 찍어 주세요", "bad"); }
+  }catch(e){ toast("사진 읽기 오류: " + (e.message || e.name), "bad"); }
+}
+$("photoBtn").addEventListener("click", () => $("photoIn").click());
+$("photoIn").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; readStill(f); });
 
 // ---------------------------------------------------------------- 코드가 읽혔을 때
 function onCode(text){
