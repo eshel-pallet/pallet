@@ -71,10 +71,12 @@ function binarize(d, off, open){
   for (let i = 0; i < n; i++){ out[4*i] = out[4*i+1] = out[4*i+2] = b[i]; out[4*i+3] = 255; }
   return new ImageData(out, w, h);
 }
-const VARIANTS = [[0, 0, 0], [1, 25, 0], [1, 10, 0], [1, 45, 0], [1, 25, 1]];   // [흑백화?, 기준 가산, 잡티제거?]
+const VARIANTS = [[1, 25, 0, 1], [0, 0, 0, 1], [1, 45, 0, 1], [1, 25, 1, 1], [1, 10, 0, 1], [1, 25, 0, 0.6], [1, 40, 0, 0.6]];   // [흑백화?, 기준 가산, 잡티제거?, 축소배율]
+const _sc = document.createElement("canvas"), _sx = _sc.getContext("2d", {willReadFrequently:true}), _sc2 = document.createElement("canvas"), _sx2 = _sc2.getContext("2d", {willReadFrequently:true});
+function shrinkData(d, k){ if (k >= 1) return d; _sc.width = d.width; _sc.height = d.height; _sx.putImageData(d, 0, 0); const w = Math.round(d.width * k), h = Math.round(d.height * k); _sc2.width = w; _sc2.height = h; _sx2.drawImage(_sc, 0, 0, w, h); return _sx2.getImageData(0, 0, w, h); }
 async function decodeVariant(d, vi){
-  const [bin, off, open] = VARIANTS[vi % VARIANTS.length];
-  const img = bin ? binarize(d, off, open) : d;
+  const [bin, off, open, k] = VARIANTS[vi % VARIANTS.length];
+  const base = shrinkData(d, k), img = bin ? binarize(base, off, open) : base;
   if (DEC.zbar){
     try{
       const s = await DEC.zbar.scanImageData(img);
