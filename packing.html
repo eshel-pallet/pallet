@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>동별작업 체크</title>
+<style>
+:root{--s:.5;--navy:#1f3a5f;--line:#c9d1db;--yellow:#ffe94d;--orange:#ffd8a8;--ink:#14213d;--mute:#7a8699}
+*{box-sizing:border-box}
+body{margin:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#eef1f5}
+header{flex:none;z-index:30;background:var(--navy);color:#fff;padding:8px 14px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+header h1{font-size:max(calc(18px*var(--s)),15px);margin:0}
+header .sub{font-size:calc(13px*var(--s));opacity:.85}
+.chips{display:flex;gap:8px;align-items:center;margin-left:auto;font-size:calc(13px*var(--s))}
+.chip{padding:3px 9px;border-radius:12px;color:var(--ink);font-weight:700}
+.zoom button{font-size:16px;padding:4px 10px;border:0;border-radius:6px;background:#fff;color:var(--navy);font-weight:700;margin-left:4px}
+.wrap{overflow:auto;flex:1;min-height:0;background:#fff}
+.tabs{flex:none;z-index:25;background:#0f2540;padding:6px 10px;display:flex;gap:8px;flex-wrap:wrap}
+.tabs button{font-size:max(calc(17px*var(--s)),14px);font-weight:800;padding:2px 14px;border:0;border-radius:8px;background:#dfe7f2;color:var(--navy);cursor:pointer}
+.tabs button.on{background:var(--yellow)}
+h2.tt{margin:0;padding:10px 12px;background:#0f2540;color:#fff;font-size:max(calc(22px*var(--s)),16px);position:sticky;left:0}
+table{margin-bottom:26px}
+table{border-collapse:separate;border-spacing:0;font-size:calc(14px*var(--s))}
+th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);text-align:center;padding:0}
+thead th{position:sticky;background:#dfe7f2;z-index:5;padding:3px 6px;font-weight:800;font-size:max(calc(21px*var(--s)),15px);height:max(calc(36px*var(--s)),28px)}
+thead tr:nth-child(1) th{top:0}
+thead tr:nth-child(2) th{top:max(calc(36px*var(--s)),28px)}
+th.cha3{background:#cfe3ff}th.cha4{background:#d7f0d2}
+.c1{position:sticky;left:0;background:#f6f8fb;z-index:4;min-width:calc(110px*var(--s));font-weight:900;font-size:calc(30px*var(--s));border-right:2px solid #8c98a9;color:var(--navy)}
+thead .c1{z-index:8;font-size:max(calc(18px*var(--s)),14px)}
+td.cell{position:relative;min-width:calc(78px*var(--s));height:calc(50px*var(--s));cursor:pointer;user-select:none}
+td.cell .main{font-size:calc(22px*var(--s));font-weight:800;line-height:calc(50px*var(--s))}
+td.cell .orig{position:absolute;left:4px;top:2px;font-size:calc(11px*var(--s));color:#6b5b3a;font-weight:700}
+td.cell.part{background:var(--orange)}
+td.cell.part .main{color:#a24400}
+td.cell.done{background:var(--yellow)}
+td.cell.done .main{font-size:calc(22px*var(--s));color:#2e6b00}
+td.cell.zero{background:#f3f4f6;color:#b6bcc6;cursor:default}
+td.cell.zero .main{font-weight:400;font-size:calc(16px*var(--s))}
+tr.boxstart td{border-top:2px solid #8c98a9}
+#modal{position:fixed;inset:0;background:rgba(10,20,40,.55);display:none;align-items:center;justify-content:center;z-index:50}
+#modal .box{background:#fff;border-radius:14px;padding:18px 20px;width:min(440px,92vw);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+#modal h2{margin:0 0 4px;font-size:20px}
+#modal .info{color:#44546a;margin-bottom:12px;font-size:14px;line-height:1.5}
+#modal .big{font-size:15px;margin:6px 0 12px}
+.btn{display:block;width:100%;padding:13px;font-size:18px;font-weight:800;border:0;border-radius:10px;margin-bottom:9px;cursor:pointer}
+.btn.ok{background:#2f9e44;color:#fff}.btn.sec{background:#e8edf4;color:var(--navy)}.btn.warn{background:#fff0f0;color:#b02a2a}
+.btn:disabled{opacity:.35;cursor:default}
+.row{display:flex;gap:8px;margin-bottom:9px}
+.row input{flex:1;min-width:0;font-size:22px;padding:9px;border:2px solid #aab6c8;border-radius:10px;text-align:center}
+.row .btn{width:130px;margin:0}
+.msg{color:#b02a2a;font-weight:700;min-height:20px;font-size:14px}
+.lbl{font-size:13px;color:#5b6b82;margin:8px 0 3px}
+@media (max-width:700px){header{padding:5px 8px;gap:4px 10px}header h1{font-size:15px}header .sub#s,.chips .chip{display:none}.chips{margin-left:0;gap:6px}.zoom button{font-size:13px;padding:3px 8px}.tabs{padding:4px 6px;gap:5px}.tabs button{font-size:14px;padding:1px 10px}}
+
+body.home{display:block;overflow:auto}
+#home{max-width:720px;margin:0 auto;padding:16px}
+#home h1{font-size:24px;margin:6px 0 4px;color:var(--navy)}
+#home .hint{color:var(--mute);font-size:14px;margin-bottom:14px}
+.card{display:block;width:100%;text-align:left;background:#fff;border:2px solid #c9d1db;border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;font-family:inherit}
+.card:active{background:#eef4ff}
+.card .po{font-size:15px;color:#5b6b82;font-weight:700}
+.card .nm{font-size:24px;font-weight:900;color:var(--navy);margin:2px 0 8px}
+.bar{height:12px;background:#e5e9f0;border-radius:6px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.card .st{font-size:13px;color:#44546a;margin-top:6px}
+.net{font-size:calc(13px*var(--s));padding:2px 8px;border-radius:10px;background:#2f9e44;color:#fff;font-weight:700}
+.net.bad{background:#c0392b}
+.back{font-size:15px;padding:5px 12px;border:0;border-radius:6px;background:#fff;color:var(--navy);font-weight:800}
+</style></head><body class="home">
+<div id="home"></div>
+<header id="hd" style="display:none">
+ <button class="back" onclick="goHome()">◀ 현장 목록</button>
+ <h1 id="ht">동별작업 체크</h1>
+ <div class="sub" id="s"></div>
+ <div class="chips"><span class="chip" style="background:#fff">아직</span><span class="chip" style="background:var(--orange)">일부 (남은 수량 큰 글씨)</span><span class="chip" style="background:var(--yellow)">✔ 완료</span>
+ <span class="sub" id="prog"></span><span class="net" id="net">연결됨</span>
+ <span class="zoom"><button onclick="zoom(-.1)">글씨 −</button><button onclick="zoom(.1)">글씨 +</button></span></div>
+</header>
+<div class="tabs" id="tabs" style="display:none"></div>
+<div class="wrap" id="wrap" style="display:none"></div>
+<div id="modal"><div class="box" id="mb"></div></div>
+<script>
+const API='https://script.google.com/macros/s/AKfycbxIdPzqj8mhSbscbDqHw-gMOggRE4LCjgTcS7gerr2q_htgIEu8tX-a8qsiKe33aqPd/exec';
+let D=null,done=[],cur=null,busy=false,timer=null,PO=null;
+const $=id=>document.getElementById(id);
+async function get(q){const r=await fetch(API+'?'+q);return r.json();}
+async function post(o){const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(o)});return r.json();}
+function netOk(ok){const n=$('net');n.textContent=ok?'연결됨':'연결 끊김 - 다시 시도 중';n.className='net'+(ok?'':' bad');}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+// ---------- 현장 목록 ----------
+async function showHome(){
+ clearInterval(timer);PO=null;D=null;
+ document.body.className='home';['hd','tabs','wrap'].forEach(i=>$(i).style.display='none');$('home').style.display='block';
+ $('home').innerHTML='<h1>동별작업 체크</h1><div class="hint">작업할 현장(PO)을 눌러 주세요</div><div id="list">불러오는 중…</div>';
+ const load=async()=>{
+  try{const r=await get('action=sites');if(!r.ok)throw 0;
+   if(!r.sites.length){$('list').innerHTML='<div class="hint">등록된 현장이 없습니다.</div>';return;}
+   $('list').innerHTML=r.sites.map(s=>{const t=s.stat.total||1,f=s.stat.full/t*100,p=s.stat.part/t*100;
+    return `<button class="card" onclick="openSite('${esc(s.po)}')"><div class="po">PO ${esc(s.po)}</div><div class="nm">${esc(s.site)}</div>
+    <div class="bar"><i style="width:${f}%;background:#2f9e44"></i><i style="width:${p}%;background:#f59f00"></i></div>
+    <div class="st">완료 ${s.stat.full} / ${s.stat.total}칸${s.stat.part?' · 일부 '+s.stat.part+'칸':''}</div></button>`;}).join('');
+  }catch(e){$('list').innerHTML='<div class="hint" style="color:#b02a2a">서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.</div>';}
+ };
+ await load();timer=setInterval(load,10000);
+}
+function goHome(){location.hash='';}
+function openSite(po){location.hash='#'+encodeURIComponent(po);}
+window.addEventListener('hashchange',route);
+function route(){const h=decodeURIComponent(location.hash.slice(1));if(h)loadSite(h);else showHome();}
+
+// ---------- 현장 화면 ----------
+async function loadSite(po){
+ clearInterval(timer);PO=po;
+ document.body.className='';$('home').style.display='none';
+ $('hd').style.display='flex';$('tabs').style.display='flex';$('wrap').style.display='block';
+ $('wrap').innerHTML='<div style="padding:20px">불러오는 중…</div>';
+ try{const r=await get('action=site&po='+encodeURIComponent(po));if(!r.ok){$('wrap').innerHTML='<div style="padding:20px;color:#b02a2a">'+esc(r.msg||'오류')+'</div>';return;}
+  D=r;done=D.types.map(T=>T.rows.map(x=>x.d.slice()));
+  $('ht').textContent=D.site;$('s').textContent='PO '+D.po;build();netOk(true);
+  timer=setInterval(poll,5000);
+ }catch(e){$('wrap').innerHTML='<div style="padding:20px;color:#b02a2a">서버에 연결할 수 없습니다.</div>';}
+}
+async function poll(){
+ if(!D||busy)return;
+ try{const r=await get('action=state&po='+encodeURIComponent(PO));if(!r.ok){netOk(false);return;}
+  netOk(true);let ch=false;
+  r.types.forEach((T,ti)=>T.rows.forEach((x,ri)=>x.d.forEach((v,ci)=>{if(done[ti]&&done[ti][ri]&&done[ti][ri][ci]!==v){done[ti][ri][ci]=v;paint(ti,ri,ci);ch=true;}})));
+  if(ch){prog();if(cur)render();}
+ }catch(e){netOk(false);}
+}
+function zoom(d){const r=document.documentElement;const v=Math.max(.5,Math.min(2.2,(parseFloat(r.style.getPropertyValue('--s'))||.5)+d));r.style.setProperty('--s',v.toFixed(2));}
+function jump(i){$('blk'+i).scrollIntoView({block:'start'});}
+function build(){
+ $('tabs').innerHTML=D.types.map((T,i)=>`<button onclick="jump(${i})">${esc(T.name)}</button>`).join('');
+ let html='';
+ D.types.forEach((T,ti)=>{
+  let h=`<div id="blk${ti}"><h2 class="tt">${esc(T.name)}</h2><table><thead><tr><th class="c1" rowspan="2">BOX</th>`;
+  let i=0;const cols=T.cols;
+  while(i<cols.length){let j=i;while(j<cols.length&&cols[j].cha===cols[i].cha)j++;
+   h+=`<th colspan="${j-i}" class="cha${esc(cols[i].cha)[0]}">${esc(cols[i].cha)}</th>`;i=j;}
+  h+='</tr><tr>'+cols.map(c=>`<th class="cha${esc(c.cha)[0]}">${esc(c.dong)}</th>`).join('')+'</tr></thead><tbody>';
+  T.rows.forEach((r,ri)=>{
+   h+=`<tr class="boxstart"><td class="c1">${esc(r.box)}</td>`;
+   r.q.forEach((q,ci)=>{h+=`<td class="cell" id="c${ti}_${ri}_${ci}" onclick="openCell(${ti},${ri},${ci})"></td>`;});
+   h+='</tr>';});
+  html+=h+'</tbody></table></div>';
+ });
+ $('wrap').innerHTML=html;
+ D.types.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>paint(ti,ri,ci))));prog();
+}
+function paint(ti,ri,ci){
+ const q=D.types[ti].rows[ri].q[ci],d=done[ti][ri][ci],td=$(`c${ti}_${ri}_${ci}`);
+ if(q===0){td.className='cell zero';td.innerHTML='<div class="main">-</div>';return;}
+ if(d>=q){td.className='cell done';td.innerHTML=`<div class="orig">${q}</div><div class="main">✔</div>`;}
+ else if(d>0){td.className='cell part';td.innerHTML=`<div class="orig">/${q}</div><div class="main">${q-d}</div>`;}
+ else{td.className='cell';td.innerHTML=`<div class="main">${q}</div>`;}
+}
+function prog(){let n=0,f=0,p=0;D.types.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>{if(q>0){n++;if(done[ti][ri][ci]>=q)f++;else if(done[ti][ri][ci]>0)p++;}})));
+ $('prog').textContent=`완료 ${f} / ${n}칸 · 일부 ${p}칸`;}
+function openCell(ti,ri,ci){
+ const q=D.types[ti].rows[ri].q[ci];if(q===0)return;cur=[ti,ri,ci];render();$('modal').style.display='flex';}
+function render(){
+ const [ti,ri,ci]=cur,T=D.types[ti],r=T.rows[ri],c=T.cols[ci],q=r.q[ci],d=done[ti][ri][ci],left=q-d;
+ const keep=$('n')?$('n').value:'', keepM=$('m')?$('m').textContent:'';
+ $('mb').innerHTML=`
+ <h2>${esc(T.name)} · ${esc(c.dong)} · ${esc(c.cha)}</h2>
+ <div class="info" style="font-size:34px;font-weight:900;color:var(--navy)">${esc(r.box)}</div>
+ <div class="big">원래 <b>${q}</b>개 · 지금까지 <b>${d}</b>개 · <b style="color:#c0392b">남은 ${left}개</b></div>
+ <button class="btn ok" ${left===0||busy?'disabled':''} onclick="act('add',${left})">전부 완료 (남은 ${left}개)</button>
+ <div class="lbl">일부만 했을 때 — 이번에 올린 개수</div>
+ <div class="row"><input id="n" type="number" inputmode="numeric" min="1" placeholder="개수" value="${keep}"><button class="btn sec" ${busy?'disabled':''} onclick="act('add',parseInt($('n').value))">추가</button></div>
+ <div class="msg" id="m">${esc(keepM)}</div>
+ <button class="btn warn" ${d>0&&!busy?'':'disabled'} onclick="act('undo')">직전 입력 취소</button>
+ <div class="lbl">수량 직접 수정 — 지금까지 한 개수</div>
+ <div class="row"><input id="e" type="number" inputmode="numeric" min="0" max="${q}" value="${d}"><button class="btn sec" ${busy?'disabled':''} onclick="act('set',parseInt($('e').value))">저장</button></div>
+ <button class="btn sec" onclick="closeM()">닫기</button>`;
+}
+function closeM(){$('modal').style.display='none';cur=null;}
+function msg(t){const m=$('m');if(m)m.textContent=t;}
+async function act(kind,v){
+ if(!cur||busy)return;const [ti,ri,ci]=cur,T=D.types[ti],r=T.rows[ri],q=r.q[ci];
+ if(kind==='add'&&!(v>0)){msg('개수를 입력해 주세요');return;}
+ if(kind==='set'&&!(v>=0&&v<=q)){msg(`0~${q} 사이로 입력해 주세요`);return;}
+ busy=true;render();
+ const body={action:kind,po:PO,type:T.name,box:r.box,ci};
+ if(kind==='add')body.n=v;if(kind==='set')body.value=v;
+ try{const res=await post(body);busy=false;
+  if(res.d!==undefined){done[ti][ri][ci]=res.d;paint(ti,ri,ci);prog();}
+  if(res.ok){netOk(true);closeM();}else{render();msg(res.msg||'저장하지 못했습니다');}
+ }catch(e){busy=false;netOk(false);render();msg('서버에 연결되지 않아 저장되지 않았습니다. 다시 눌러 주세요.');}
+}
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeM();});
+document.documentElement.style.setProperty('--s','.5');
+route();
+</script></body></html>
