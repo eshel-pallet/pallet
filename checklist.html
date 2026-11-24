@@ -95,6 +95,7 @@ td.cell .main{font-size:calc(22px*var(--s));font-weight:800;line-height:calc(50p
 td.cell .orig{position:absolute;left:4px;top:2px;font-size:calc(11px*var(--s));color:#6b5b3a;font-weight:700}
 td.cell.part{background:var(--orange)}td.cell.part .main{color:#a24400}
 td.cell.done{background:var(--yellow)}td.cell.done .main{color:#2e6b00}
+td.cell.lock{background:#e4e7ec;cursor:not-allowed}td.cell.lock .main{color:#a3acb9;font-weight:500}td.cell.lock::after{content:'🔒';position:absolute;right:3px;top:1px;font-size:calc(11px*var(--s))}
 td.cell.zero{background:#f3f4f6;color:#b6bcc6;cursor:default}td.cell.zero .main{font-weight:400;font-size:calc(16px*var(--s))}
 td.cell.sel{outline:4px solid #1c7ed6;outline-offset:-4px;background:#d0ebff!important}
 tr.boxstart td{border-top:2px solid #8c98a9}
@@ -166,7 +167,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.2',APP_DATE='2026.11.24';
+const APP_VER='1.3',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);return p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;};   // '59A A-1' → 'A-1'
 const isNo=w=>/^No\./.test(w.model||'');
@@ -189,11 +190,11 @@ async function showHome(){
   $('home').innerHTML='<h1>선출고 체크리스트</h1><div class="hint">처음 한 번만: 서버(구글 앱스 스크립트) 웹 앱 주소를 붙여 넣고 저장하세요.</div><input id="apiin" style="width:100%;font-size:15px;padding:10px;border:2px solid #aab6c8;border-radius:10px" placeholder="https://script.google.com/macros/s/.../exec"><button class="btn ok" style="margin-top:10px" onclick="saveApi()">저장</button>';return;}
  document.body.className='home';['hd','modes','tools','wrap'].forEach(i=>$(i).style.display='none');$('home').style.display='flex';
  $('home').innerHTML='<h1>선출고 체크리스트</h1><div class="hint">작업할 현장(PO)을 눌러 주세요</div><div id="list">불러오는 중…</div>'+
- `<div class="foot"><div class="ttl">선출고 체크리스트</div><div class="ver">버전 ${APP_VER} · ${APP_DATE}</div>
+ `<div class="foot"><div class="ttl">선출고 체크리스트</div><div class="ver">화면 버전 ${APP_VER} · ${APP_DATE} · <span id="sver">서버 확인 중…</span></div>
  <div class="sp">작업 · 포장 · 동별 연동</div><div>개발 : 서동원 &nbsp;·&nbsp; Claude(Anthropic) 활용 개발</div>
  <div>문의 : <a href="tel:01087710442">010-8771-0442</a></div><div>© 2026 서동원. All rights reserved.</div><div class="ver">무단 복제·배포를 금합니다.</div></div>`;
  const bar=(a,t)=>`<div class="bar"><i style="width:${t?a/t*100:0}%"></i></div>`;
- const load=async()=>{try{const r=await get('action=sites');if(!r.ok)throw 0;
+ const load=async()=>{try{const r=await get('action=sites');if(!r.ok)throw 0;if($('sver'))$('sver').textContent='서버 '+(r.ver||'1.2 이하 (Code.gs 새 버전 배포 필요)');
   if(!r.sites.length){$('list').innerHTML='<div class="hint">등록된 현장이 없습니다.</div>';return;}
   $('list').innerHTML=r.sites.map(s=>{const k=s.stat;return `<button class="card" onclick="openSite('${esc(s.po)}')"><div class="po">PO ${esc(s.po)}</div><div class="nm">${esc(s.site)}</div>
    <div class="st2">작업 ${k.work.f}/${k.work.t}줄 ${bar(k.work.f,k.work.t)}</div>
@@ -367,6 +368,10 @@ function buildDong(){
  $('wrap').innerHTML=html+'</div>';paintDongAll();
 }
 function paintDongAll(){SITE.dong.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>paintDong(ti,ri,ci))));paintBoxes();}
+function dongFree(ti,ri){   // 포장 연동 현장에서 이 박스를 지금 동별에 올릴 수 있는 수량 (null = 제한 없음)
+ const r=SITE.dong[ti].rows[ri];if(!(r.box in pIdx))return null;const bi=pIdx[r.box],b=SITE.pack[bi];
+ if(!b.lines.some(l=>l.wks&&l.wks.length))return null;
+ return both?Math.max(0,Math.min(b.n-Eof(bi),capOf(bi))):Math.max(0,Eof(bi)-Lof(bi));}
 function paintDong(ti,ri,ci){
  const q=SITE.dong[ti].rows[ri].q[ci],d=dD[ti][ri][ci],td=$(`c${ti}_${ri}_${ci}`);if(!td)return;
  if(q===0){td.className='cell zero';td.innerHTML='<div class="main">-</div>';return;}
@@ -375,6 +380,7 @@ function paintDong(ti,ri,ci){
  else if(d>0){cls+=' part';td.innerHTML=`<div class="orig">/${q}</div><div class="main">${q-d}</div>`;}
  else td.innerHTML=`<div class="main">${q}</div>`;
  if(sel.has(`d:${ti}_${ri}_${ci}`))cls+=' sel';
+ {const f=dongFree(ti,ri);if(f!==null&&f<=0&&d<q)cls+=' lock';}
  td.className=cls;
 }
 function paintBoxes(){
@@ -384,6 +390,7 @@ function paintBoxes(){
 }
 function clickDong(ti,ri,ci){
  const q=SITE.dong[ti].rows[ri].q[ci];if(q===0)return;
+ {const f=dongFree(ti,ri);if(f!==null&&f<=0&&dD[ti][ri][ci]<q){toast(both?'이 박스는 가공 또는 포장 가능 수량이 없어 "포장+동별"로 올릴 수 없습니다.':'아직 포장하지 않은 박스입니다. 먼저 포장을 입력하거나 "포장+동별" 모드를 켜 주세요.',3500);return;}}
  if(selMode){if(dD[ti][ri][ci]>=q)return;const k=`d:${ti}_${ri}_${ci}`;sel.has(k)?sel.delete(k):sel.add(k);bmsg='';paintDong(ti,ri,ci);updateBar();return;}
  openModal({k:'d',ti,ri,ci});}
 
@@ -397,7 +404,7 @@ function ctxOf(c){
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
  return {title:`${esc(T.name)} · ${esc(cl.dong)}${cl.cha?' · '+esc(cl.cha):''}`,head:esc(lab(r.box,T.name)),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
   both:true,
-  extra:(both?'<div class="bnote">⚡ 포장+동별 모드: 올린 만큼 포장 수량에도 같이 들어갑니다.</div>':'')+(bs&&bs!=='done'&&bs!=='part'&&bs!=='ready'?'<div class="notice">⏳ 이 박스는 아직 작업(가공)이 끝나지 않았습니다.</div>':''),blocked:false,tail:''};
+  extra:(both?'<div class="bnote">⚡ 포장+동별 모드: 올린 만큼 포장 수량에도 같이 들어갑니다.</div>':'')+(()=>{const f=dongFree(c.ti,c.ri);return f===null?'':`<div class="notice">이 박스에서 지금 ${both?'포장+동별로':'동별에'} 올릴 수 있는 수량: <b>${f}</b>${both?'':' (포장한 만큼만 가능)'}</div>`;})()+(bs&&bs!=='done'&&bs!=='part'&&bs!=='ready'?'<div class="notice">⏳ 이 박스는 아직 작업(가공)이 끝나지 않았습니다.</div>':''),blocked:false,tail:''};
 }
 function packExtra(bi,can){
  const b=SITE.pack[bi];let h='';
