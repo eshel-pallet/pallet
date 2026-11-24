@@ -338,7 +338,7 @@ function renderPack(){
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
    h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(lab(b.box,b.pyeong))}</div>
     <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${wprog(l)}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
-    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${(()=>{const c=capOf(i),rem=b.n-E;return c!==null&&rem>0&&c<rem?`<div class="psm" style="color:#b3261e;font-weight:900">⚠ 가공 부족<br>지금 ${c}박스까지</div>`:'';})()}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
+    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${(()=>{const c=capOf(i),rem=b.n-E;if(c===null||rem<=0)return '';return c<=0?`<div class="psm" style="color:#b3261e;font-weight:900">⚠ 가공 필요<br>포장 가능 0박스</div>`:`<div class="psm" style="color:#1d6b2f;font-weight:900;font-size:calc(15px*var(--f))">포장 가능<br>${Math.min(c,rem)}박스</div>`;})()}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
  });
  h+=any?'':'<div class="empty">해당하는 박스가 없습니다</div>';
  $('wrap').innerHTML=h+'</div>';$('wrap').scrollTop=keep;
