@@ -41,6 +41,8 @@ body.selmode .wrap{padding-bottom:170px}
 .wr,.pr{display:flex;gap:10px;align-items:stretch;border:1px solid var(--line);border-radius:10px;margin:0 0 6px;background:#fff;cursor:pointer;font-size:calc(15px*var(--f))}
 .wr .wn{flex:none;width:calc(54px*var(--f));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:calc(20px*var(--f));color:var(--navy);background:#f1f4f9;border-radius:10px 0 0 10px}
 .wr .wm,.pr .pm{flex:1;min-width:0;padding:6px 0}
+.wedge{font-weight:900;font-size:calc(24px*var(--f));line-height:1.15;color:var(--navy);letter-spacing:.3px}
+.wm{padding-left:12px!important}
 .wname{font-weight:900;font-size:calc(17px*var(--f));line-height:1.3}
 .wcode{color:#44546a;font-size:calc(13px*var(--f))}
 .wproc{display:inline-block;margin-top:2px;background:#e8edf4;color:var(--navy);font-weight:800;border-radius:6px;padding:0 6px;font-size:calc(12px*var(--f))}
@@ -145,7 +147,7 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <script>
 let API='__API_URL__';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiTest',q);API=localStorage.getItem('apiTest')||'';}catch(e){}}
-const APP_VER='0.2 TEST',APP_DATE='2026.11.24';
+const APP_VER='0.3 TEST',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -271,8 +273,8 @@ function renderWork(){
  const keep=$('wrap').scrollTop;
  $('wrap').innerHTML='<div class="list">'+(L.length?L.map(i=>{const w=SITE.work[i],d=wD[i],q=w.q,done=d>=q,part=!done&&d>0;
   const big=done?'✔':part?(q-d):q,sub=done?`총 ${q}`:part?`/총 ${q}`:'총수량';
-  return `<div class="wr ${done?'done':part?'part':''} ${sel.has('w:'+w.id)?'sel':''}" onclick="clickWork(${i})"><div class="wn">${esc(w.seq)}</div>
-   <div class="wm"><div class="wname">${esc(w.name)}</div><div class="wcode">${esc(w.model)} · ${esc(w.pyeong)}</div>${w.proc?`<span class="wproc">${esc(w.proc)}</span>`:''}${w.note?`<div class="wnote">${esc(w.note)}</div>`:''}</div>
+  return `<div class="wr ${done?'done':part?'part':''} ${sel.has('w:'+w.id)?'sel':''}" onclick="clickWork(${i})">
+   <div class="wm"><div class="wedge">${esc(w.edge||w.model)}</div><div class="wname">${esc(w.name)}</div>${w.vcut?`<span class="wproc">V컷 ${esc(w.vcut)}</span>`:''}</div>
    <div class="wq"><div class="wbig">${big}</div><div class="wsub">${sub}</div></div></div>`;}).join(''):'<div class="empty">해당하는 줄이 없습니다</div>')+'</div>';
  $('wrap').scrollTop=keep;
 }
@@ -338,8 +340,8 @@ function clickDong(ti,ri,ci){
 
 // ---------- 모달 (작업/포장/동별 공통) ----------
 function ctxOf(c){
- if(c.k==='w'){const w=SITE.work[c.i];return {title:`작업 · 순서 ${esc(w.seq)}`,head:esc(w.name),sub:`${esc(w.model)} · ${esc(w.pyeong)}${w.proc?' · '+esc(w.proc):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
-   extra:'',blocked:false,tail:'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.'};}
+ if(c.k==='w'){const w=SITE.work[c.i];return {title:'작업',head:esc(w.edge||w.model),sub:`${esc(w.name)}${w.vcut?'<br>V컷 '+esc(w.vcut):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
+   extra:'',blocked:false,tail:w.codes?'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.':'이 품목은 포장리스트와 연결되지 않습니다 (작업 체크만).'};}
  if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · 박스 ${esc(b.box)} (${esc(b.pyeong)})`,head:esc(b.box),sub:b.lines.map(l=>esc(l.name)+' '+esc(l.model)).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
    extra:can?'':'<div class="notice">⏳ 아직 작업(가공)이 끝나지 않은 품목이 있어 포장할 수 없습니다.</div>',blocked:!can,tail:''};}
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
