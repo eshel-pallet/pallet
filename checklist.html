@@ -181,7 +181,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='2.0',APP_DATE='2026.11.24';
+const APP_VER='2.1',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
 const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};
@@ -291,7 +291,8 @@ const LBL={wait:'작업 대기',ready:'포장 가능',part:'일부 포장',done:
 
 // ---------- 화면 전환 ----------
 function setMode(m,force){
- if(!force&&m===mode)return;mode=m;if(selMode)clearSel(true);if(m!=='dong'&&both)toggleBoth(true);
+ if(!force&&m===mode)return;mode=m;if(selMode)toggleSel();   // 화면(작업/포장/동별)을 바꾸면 여러 칸 선택 모드는 자동으로 끔
+ if(m!=='dong'&&both)toggleBoth(true);
  refresh(true);
 }
 function toggleBoth(quiet){both=!both;document.body.classList.toggle('both',both);const b=$('bothbtn');b.className='hb both'+(both?' on':'');b.textContent=both?'포장+동별 끄기':'포장+동별';
