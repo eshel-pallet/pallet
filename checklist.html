@@ -98,6 +98,20 @@ td.cell.done{background:var(--yellow)}td.cell.done .main{color:#2e6b00}
 td.cell.zero{background:#f3f4f6;color:#b6bcc6;cursor:default}td.cell.zero .main{font-weight:400;font-size:calc(16px*var(--s))}
 td.cell.sel{outline:4px solid #1c7ed6;outline-offset:-4px;background:#d0ebff!important}
 tr.boxstart td{border-top:2px solid #8c98a9}
+/* 손잡이도어 작업카드 */
+.wr.nc .wn2{flex:none;width:calc(78px*var(--f));display:flex;flex-direction:column;align-items:center;justify-content:center;background:#17345c;color:#fff;border-radius:10px 0 0 10px;line-height:1.1}
+.wr.nc .wn2 small{font-size:calc(11px*var(--f));opacity:.8;font-weight:700}.wr.nc .wn2 b{font-size:calc(22px*var(--f));font-weight:900}
+.wr.nc.done .wn2{background:#2f7d44}
+.nc .sd{display:inline-block;border-radius:7px;padding:0 9px;font-weight:900;font-size:calc(20px*var(--f));margin-right:8px;color:#fff}
+.nc .sd.s1{background:#1c7ed6}.nc .sd.s2{background:#e8590c}.nc .sd.s3{background:#6b7686}
+.nc .sp{display:flex;align-items:baseline;gap:8px;margin-top:2px}
+.nc .sp i{font-style:normal;font-size:calc(11px*var(--f));font-weight:800;border-radius:5px;padding:0 6px;white-space:nowrap}
+.nc .sp i.k1{background:#e5e8ee;color:#44546a}.nc .sp i.k2{background:#d3f3da;color:#1d6b2f}
+.nc .sp b{font-size:calc(22px*var(--f));font-weight:900;color:var(--navy)}
+.nc .pcs{color:#44546a;font-weight:700;font-size:calc(12px*var(--f));margin-top:2px}
+.pr .pm .ln .wp{font-style:normal;border-radius:6px;padding:0 6px;font-size:calc(12px*var(--f));font-weight:900;white-space:nowrap;margin-left:4px;background:#e5e8ee;color:#6b7686}
+.pr .pm .ln .wp.part{background:var(--orange);color:#a24400}.pr .pm .ln .wp.done{background:#d3f3da;color:#1d6b2f}
+tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;padding:4px 10px;font-size:calc(15px*var(--s));position:sticky;left:0}
 /* 모달/바 */
 #modal{position:fixed;inset:0;background:rgba(10,20,40,.55);display:none;align-items:center;justify-content:center;z-index:50}
 #modal .box{background:#fff;border-radius:14px;padding:18px 20px;width:min(460px,94vw);max-height:92vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.35)}
@@ -152,8 +166,10 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.0',APP_DATE='2026.11.24';
+const APP_VER='1.1',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
+const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);return p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;};   // '59A A-1' → 'A-1'
+const isNo=w=>/^No\./.test(w.model||'');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
 async function post(o){const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(o)});return r.json();}
@@ -232,7 +248,13 @@ function packable(bi){const b=SITE.pack[bi];return OVR.has(b.box)||b.lines.every
 function shortOf(bi){return SITE.pack[bi].lines.reduce((m,l)=>Math.max(m,lineShort(l)),0);}
 function Lof(bi){let s=0;(boxDong[SITE.pack[bi].box]||[]).forEach(([ti,ri])=>dD[ti][ri].forEach(v=>s+=v));return s;}
 function Eof(bi){return pD[bi];}
-function pstat(bi){const b=SITE.pack[bi],e=Eof(bi);if(e>=b.n)return 'done';if(e>0)return 'part';return packable(bi)?'ready':'wait';}
+function capOf(bi){   // 가공한 수량 기준으로 지금 더 포장할 수 있는 박스 수 (가공 연결이 없는 현장은 null = 제한 없음)
+ const b=SITE.pack[bi];let cap=null;
+ b.lines.forEach(l=>(l.wks||[]).forEach(id=>{if(!(id in wIdx))return;
+  let packed=0;SITE.pack.forEach((bb,j)=>bb.lines.forEach(ll=>{if((ll.wks||[]).indexOf(id)>=0)packed+=pD[j]*(ll.per||1);}));
+  const free=Math.floor((wD[wIdx[id]]-packed)/(l.per||1));cap=cap===null?free:Math.min(cap,free);}));
+ return cap===null?null:Math.max(0,cap);}
+function pstat(bi){const b=SITE.pack[bi],e=Eof(bi);if(e>=b.n)return 'done';if(e>0)return 'part';if(!packable(bi))return 'wait';return capOf(bi)===0?'wait':'ready';}
 function boxStat(box){return box in pIdx?pstat(pIdx[box]):null;}
 const LBL={wait:'작업 대기',ready:'포장 가능',part:'일부 포장',done:'포장 완료'};
 
@@ -277,6 +299,7 @@ function renderTools(){
   T.innerHTML=SITE.dong.map((t,i)=>{const st=typeAllDone(t);return `<button class="${st?'ok':''}" onclick="jump(${i})">${esc(t.name)}${st?' ✔':''}</button>`;}).join('');
  }
 }
+function wprog(l){if(!l.wks||!l.wks.length)return '';return l.wks.map(id=>{if(!(id in wIdx))return '';const i=wIdx[id],w=SITE.work[i],d=wD[i],c=d>=w.q?'done':d>0?'part':'';return `<i class="wp ${c}">가공 ${d}/${w.q}${c==='done'?' ✔':''}</i>`;}).join('');}
 function typeAllDone(T){return T.rows.length>0&&T.rows.every(r=>boxStat(r.box)==='done');}
 function jump(i){const e=$('blk'+i);if(e)e.scrollIntoView({block:'start'});}
 
@@ -286,6 +309,14 @@ function renderWork(){
  const keep=$('wrap').scrollTop;
  $('wrap').innerHTML='<div class="list">'+(L.length?L.map(i=>{const w=SITE.work[i],d=wD[i],q=w.q,done=d>=q,part=!done&&d>0;
   const big=done?'✔':part?(q-d):q,sub=done?`총 ${q}`:part?`/총 ${q}`:'총수량';
+  if(isNo(w)){const same=w.edge===w.vcut,sc=w.name==='소'?'s1':w.name==='대'?'s2':'s3';
+   return `<div class="wr nc ${done?'done':part?'part':''} ${sel.has('w:'+w.id)?'sel':''}" onclick="clickWork(${i})">
+   <div class="wn2"><small>규격</small><b>${esc(w.model)}</b></div>
+   <div class="wm"><div><span class="sd ${sc}">${esc(w.name)}</span><span class="wname">${esc(w.proc.split(' · 힌지 ')[0])}</span></div>
+    ${w.proc.indexOf(' · 힌지 ')>0?`<div class="pcs">힌지 ${esc(w.proc.split(' · 힌지 ')[1])}</div>`:''}
+    ${same?`<div class="sp"><i class="k2">재단=마감</i><b>${esc(w.vcut)}</b></div>`:`<div class="sp"><i class="k1">재단 (가공 전)</i><b>${esc(w.edge)}</b></div><div class="sp"><i class="k2">마감 (가공 후)</i><b>${esc(w.vcut)}</b></div>`}
+    ${w.note?`<div class="pcs">${esc(w.note)}</div>`:''}</div>
+   <div class="wq"><div class="wbig">${big}</div><div class="wsub">${sub}</div></div></div>`;}
   return `<div class="wr ${done?'done':part?'part':''} ${sel.has('w:'+w.id)?'sel':''}" onclick="clickWork(${i})">
    <div class="wm"><div class="wedge">${esc(w.edge||w.model)}</div><div class="wname">${esc(w.name)}</div>${w.vcut?`<span class="wproc">V컷 ${esc(w.vcut)}</span>`:''}</div>
    <div class="wq"><div class="wbig">${big}</div><div class="wsub">${sub}</div></div></div>`;}).join(''):'<div class="empty">해당하는 줄이 없습니다</div>')+'</div>';
@@ -305,9 +336,9 @@ function renderPack(){
   const rows=ids.filter(i=>!pReady||pstat(i)==='ready'||pstat(i)==='part');
   h+=`<h3 class="grp ${all?'ok':''}">${esc(py)} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
-   h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(b.box)}</div>
-    <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
-    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
+   h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(lab(b.box,b.pyeong))}</div>
+    <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${wprog(l)}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
+    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${(()=>{const c=capOf(i),rem=b.n-E;return c!==null&&rem>0&&c<rem?`<div class="psm" style="color:#b3261e;font-weight:900">⚠ 가공 부족<br>지금 ${c}박스까지</div>`:'';})()}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
  });
  h+=any?'':'<div class="empty">해당하는 박스가 없습니다</div>';
  $('wrap').innerHTML=h+'</div>';$('wrap').scrollTop=keep;
@@ -320,11 +351,16 @@ function clickPack(i){const b=SITE.pack[i];
 function buildDong(){
  let html='<div id="dongroot">';
  SITE.dong.forEach((T,ti)=>{
-  let h=`<div id="blk${ti}"><h2 class="tt">${esc(T.name)}<span class="ban no" id="ban${ti}"></span></h2><table><thead><tr><th class="c1" rowspan="2">BOX</th>`;
-  let i=0;const cols=T.cols;
+  const cols=T.cols,noCha=cols.every(c=>!c.cha);
+  let h=`<div id="blk${ti}"><h2 class="tt">${esc(T.name)}<span class="ban no" id="ban${ti}"></span></h2><table><thead><tr><th class="c1" ${noCha?'':'rowspan="2"'}>BOX</th>`;
+  if(noCha){h+=cols.map(c=>`<th>${esc(c.dong)}</th>`).join('')+'</tr></thead><tbody>';}
+  else{let i=0;
   while(i<cols.length){let j=i;while(j<cols.length&&cols[j].cha===cols[i].cha)j++;h+=`<th colspan="${j-i}" class="cha${esc(cols[i].cha)[0]}">${esc(cols[i].cha)}</th>`;i=j;}
-  h+='</tr><tr>'+cols.map(c=>`<th class="cha${esc(c.cha)[0]}">${esc(c.dong)}</th>`).join('')+'</tr></thead><tbody>';
-  T.rows.forEach((r,ri)=>{h+=`<tr class="boxstart"><td class="c1" id="bx${ti}_${ri}">${esc(r.box)}</td>`;
+  h+='</tr><tr>'+cols.map(c=>`<th class="cha${esc(c.cha)[0]}">${esc(c.dong)}</th>`).join('')+'</tr></thead><tbody>';}
+  let lastBlk=null,bn=0;
+  T.rows.forEach((r,ri)=>{const pb=r.box in pIdx?SITE.pack[pIdx[r.box]]:null,blk=pb&&pb.lines[0]&&pb.lines[0].blk;
+   if(blk&&blk!==lastBlk){bn++;lastBlk=blk;h+=`<tr class="blkrow"><td colspan="${cols.length+1}">▼ 블록 ${bn} · 박스 세로 ${esc(blk)} (같은 파렛트 묶음)</td></tr>`;}
+   h+=`<tr class="boxstart"><td class="c1" id="bx${ti}_${ri}">${esc(lab(r.box,T.name))}</td>`;
    r.q.forEach((q,ci)=>{h+=`<td class="cell" id="c${ti}_${ri}_${ci}" onclick="clickDong(${ti},${ri},${ci})"></td>`;});h+='</tr>';});
   html+=h+'</tbody></table></div>';
  });
@@ -353,17 +389,19 @@ function clickDong(ti,ri,ci){
 
 // ---------- 모달 (작업/포장/동별 공통) ----------
 function ctxOf(c){
+ if(c.k==='w'&&isNo(c.w=SITE.work[c.i])){const w=c.w;return {title:`작업 · 규격 ${esc(w.model)} · ${esc(w.name)}`,head:esc(w.model+' '+w.name),sub:`재단(가공 전) <b>${esc(w.edge)}</b><br>마감(가공 후) <b>${esc(w.vcut)}</b><br>${esc(w.proc)}${w.note?'<br>'+esc(w.note):''}`,q:w.q,d:wD[c.i],unit:'장',what:'가공한',body:{type:'작업',box:w.id,ci:0},extra:'',blocked:false,tail:'여기서 입력한 수량은 포장 화면의 해당 박스에 "가공 ○/○"로 자동 표시됩니다.'};}
  if(c.k==='w'){const w=SITE.work[c.i];return {title:'작업',head:esc(w.edge||w.model),sub:`${esc(w.name)}${w.vcut?'<br>V컷 '+esc(w.vcut):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
    extra:'',blocked:false,tail:w.codes?'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.':'이 품목은 포장리스트와 연결되지 않습니다 (작업 체크만).'};}
- if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · 박스 ${esc(b.box)} (${esc(b.pyeong)})`,head:esc(b.box),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
-   extra:packExtra(c.i,can),blocked:!can,tail:''};}
+ if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · ${esc(b.pyeong)} 박스 ${esc(lab(b.box,b.pyeong))}`,head:esc(lab(b.box,b.pyeong)),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')+wprog(l)).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
+   extra:packExtra(c.i,can),blocked:!can,noAll:(()=>{const k=capOf(c.i);return k!==null&&k<b.n-Eof(c.i);})(),tail:''};}
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
- return {title:`${esc(T.name)} · ${esc(cl.dong)} · ${esc(cl.cha)}`,head:esc(r.box),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
+ return {title:`${esc(T.name)} · ${esc(cl.dong)}${cl.cha?' · '+esc(cl.cha):''}`,head:esc(lab(r.box,T.name)),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
   both:true,
   extra:(both?'<div class="bnote">⚡ 포장+동별 모드: 올린 만큼 포장 수량에도 같이 들어갑니다.</div>':'')+(bs&&bs!=='done'&&bs!=='part'&&bs!=='ready'?'<div class="notice">⏳ 이 박스는 아직 작업(가공)이 끝나지 않았습니다.</div>':''),blocked:false,tail:''};
 }
 function packExtra(bi,can){
  const b=SITE.pack[bi];let h='';
+ {const c=capOf(bi),rem=b.n-Eof(bi);if(c!==null&&rem>0&&c<rem)h+=`<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 가공한 수량이 모자라 지금은 <b>${c}박스</b>까지만 포장할 수 있습니다. (가공보다 많이 포장하면 저장되지 않습니다)</div>`;}
  const short=b.lines.filter(l=>lineShort(l)>0).map(l=>`<div>· <b>${esc(l.edge||l.model)}</b> ${esc(l.name)} — 작업 ${wD[wIdx[l.work]]}/${SITE.work[wIdx[l.work]].q} (부족 −${lineShort(l)})</div>`).join('');
  if(OVR.has(b.box))h+='<div class="bnote">🔓 관리자 예외 승인됨 — 작업이 덜 끝났어도 포장할 수 있습니다.</div>';
  else if(!can)h+=`<div class="notice">⏳ 작업이 더 필요합니다. (모자란 수량이 총수량의 ${(SITE&&SITE.short)||12}% 이내여야 포장 가능)</div>`;
@@ -389,7 +427,7 @@ function renderModal(){
  const keep=$('n')?$('n').value:'',keepM=$('m')?$('m').textContent:'',keepP=$('pin')?$('pin').value:'';
  $('mb').innerHTML=`<h2>${x.title}</h2><div class="info" style="font-size:30px;font-weight:900;color:var(--navy)">${x.head}</div>${x.sub?`<div class="info">${x.sub}</div>`:''}${x.extra}
  <div class="big">전체 <b>${q}</b>${x.unit} · 지금까지 <b>${d}</b> · <b style="color:#c0392b">남은 ${left}</b></div>
- <button class="btn ok" ${left===0||busy||x.blocked?'disabled':''} onclick="act('add',${left})">전부 완료 (남은 ${left}${x.unit})</button>
+ <button class="btn ok" ${left===0||busy||x.blocked||x.noAll?'disabled':''} onclick="act('add',${left})">전부 완료 (남은 ${left}${x.unit})</button>
  <div class="lbl">일부만 했을 때 — 이번에 ${x.what} 개수</div>
  <div class="row"><input id="n" type="number" inputmode="numeric" min="1" placeholder="개수" value="${esc(keep)}"><button class="btn sec" ${busy||x.blocked?'disabled':''} onclick="act('add',parseInt($('n').value))">추가</button></div>
  <div class="msg" id="m">${esc(keepM)}</div>${x.tail?`<div class="lbl">${x.tail}</div>`:''}
