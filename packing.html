@@ -64,6 +64,11 @@ body.home{display:block;overflow:auto}
 .card .st{font-size:13px;color:#44546a;margin-top:6px}
 .net{font-size:calc(13px*var(--s));padding:2px 8px;border-radius:10px;background:#2f9e44;color:#fff;font-weight:700}
 .net.bad{background:#c0392b}
+td.cell.sel{outline:4px solid #1c7ed6;outline-offset:-4px;background:#d0ebff!important}
+.back.on{background:#ffe94d}
+#bar{flex:none;display:none;gap:8px;padding:8px 10px;background:#0f2540;align-items:center;flex-wrap:wrap}
+#bar .btn{width:auto;flex:1;margin:0;min-width:140px;padding:11px;font-size:17px}
+#bar .bm{color:#ffd8a8;font-size:14px;flex-basis:100%;font-weight:700}
 .back{font-size:15px;padding:5px 12px;border:0;border-radius:6px;background:#fff;color:var(--navy);font-weight:800}
 </style></head><body class="home">
 <div id="home"></div>
@@ -73,14 +78,15 @@ body.home{display:block;overflow:auto}
  <div class="sub" id="s"></div>
  <div class="chips"><span class="chip" style="background:#fff">아직</span><span class="chip" style="background:var(--orange)">일부 (남은 수량 큰 글씨)</span><span class="chip" style="background:var(--yellow)">✔ 완료</span>
  <span class="sub" id="prog"></span><span class="net" id="net">연결됨</span>
- <span class="zoom"><button onclick="zoom(-.1)">글씨 −</button><button onclick="zoom(.1)">글씨 +</button></span></div>
+ <button class="back" id="selbtn" onclick="toggleSel()">여러 칸 선택</button> <span class="zoom"><button onclick="zoom(-.1)">글씨 −</button><button onclick="zoom(.1)">글씨 +</button></span></div>
 </header>
 <div class="tabs" id="tabs" style="display:none"></div>
 <div class="wrap" id="wrap" style="display:none"></div>
+<div id="bar"></div>
 <div id="modal"><div class="box" id="mb"></div></div>
 <script>
 const API='https://script.google.com/macros/s/AKfycbxIdPzqj8mhSbscbDqHw-gMOggRE4LCjgTcS7gerr2q_htgIEu8tX-a8qsiKe33aqPd/exec';
-let D=null,done=[],cur=null,busy=false,timer=null,PO=null;
+let D=null,done=[],cur=null,busy=false,timer=null,PO=null,selMode=false,sel=new Set(),lastBatch=null,bmsg='';
 const $=id=>document.getElementById(id);
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
 async function post(o){const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(o)});return r.json();}
@@ -110,7 +116,7 @@ function route(){const h=decodeURIComponent(location.hash.slice(1));if(h)loadSit
 
 // ---------- 현장 화면 ----------
 async function loadSite(po){
- clearInterval(timer);PO=po;
+ clearInterval(timer);PO=po;selMode=false;sel.clear();lastBatch=null;bmsg='';$('bar').style.display='none';$('selbtn').className='back';$('selbtn').textContent='여러 칸 선택';
  document.body.className='';$('home').style.display='none';
  $('hd').style.display='flex';$('tabs').style.display='flex';$('wrap').style.display='block';
  $('wrap').innerHTML='<div style="padding:20px">불러오는 중…</div>';
@@ -124,8 +130,8 @@ async function poll(){
  if(!D||busy)return;
  try{const r=await get('action=state&po='+encodeURIComponent(PO));if(!r.ok){netOk(false);return;}
   netOk(true);let ch=false;
-  r.types.forEach((T,ti)=>T.rows.forEach((x,ri)=>x.d.forEach((v,ci)=>{if(done[ti]&&done[ti][ri]&&done[ti][ri][ci]!==v){done[ti][ri][ci]=v;paint(ti,ri,ci);ch=true;}})));
-  if(ch){prog();if(cur)render();}
+  r.types.forEach((T,ti)=>T.rows.forEach((x,ri)=>x.d.forEach((v,ci)=>{if(done[ti]&&done[ti][ri]&&done[ti][ri][ci]!==v){done[ti][ri][ci]=v;if(v>=D.types[ti].rows[ri].q[ci])sel.delete(ti+'_'+ri+'_'+ci);paint(ti,ri,ci);ch=true;}})));
+  if(ch){prog();updateBar();if(cur)render();}
  }catch(e){netOk(false);}
 }
 function zoom(d){const r=document.documentElement;const v=Math.max(.5,Math.min(2.2,(parseFloat(r.style.getPropertyValue('--s'))||.5)+d));r.style.setProperty('--s',v.toFixed(2));}
@@ -151,14 +157,18 @@ function build(){
 function paint(ti,ri,ci){
  const q=D.types[ti].rows[ri].q[ci],d=done[ti][ri][ci],td=$(`c${ti}_${ri}_${ci}`);
  if(q===0){td.className='cell zero';td.innerHTML='<div class="main">-</div>';return;}
- if(d>=q){td.className='cell done';td.innerHTML=`<div class="orig">${q}</div><div class="main">✔</div>`;}
- else if(d>0){td.className='cell part';td.innerHTML=`<div class="orig">/${q}</div><div class="main">${q-d}</div>`;}
- else{td.className='cell';td.innerHTML=`<div class="main">${q}</div>`;}
+ let cls='cell';
+ if(d>=q){cls+=' done';td.innerHTML=`<div class="orig">${q}</div><div class="main">✔</div>`;}
+ else if(d>0){cls+=' part';td.innerHTML=`<div class="orig">/${q}</div><div class="main">${q-d}</div>`;}
+ else{td.innerHTML=`<div class="main">${q}</div>`;}
+ if(sel.has(ti+'_'+ri+'_'+ci))cls+=' sel';
+ td.className=cls;
 }
 function prog(){let n=0,f=0,p=0;D.types.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>{if(q>0){n++;if(done[ti][ri][ci]>=q)f++;else if(done[ti][ri][ci]>0)p++;}})));
  $('prog').textContent=`완료 ${f} / ${n}칸 · 일부 ${p}칸`;}
 function openCell(ti,ri,ci){
- const q=D.types[ti].rows[ri].q[ci];if(q===0)return;cur=[ti,ri,ci];render();$('modal').style.display='flex';}
+ const q=D.types[ti].rows[ri].q[ci];if(q===0)return;
+ if(selMode){if(done[ti][ri][ci]>=q)return;const k=ti+'_'+ri+'_'+ci;if(sel.has(k))sel.delete(k);else sel.add(k);bmsg='';paint(ti,ri,ci);updateBar();return;}cur=[ti,ri,ci];render();$('modal').style.display='flex';}
 function render(){
  const [ti,ri,ci]=cur,T=D.types[ti],r=T.rows[ri],c=T.cols[ci],q=r.q[ci],d=done[ti][ri][ci],left=q-d;
  const keep=$('n')?$('n').value:'', keepM=$('m')?$('m').textContent:'';
@@ -188,6 +198,37 @@ async function act(kind,v){
   if(res.d!==undefined){done[ti][ri][ci]=res.d;paint(ti,ri,ci);prog();}
   if(res.ok){netOk(true);closeM();}else{render();msg(res.msg||'저장하지 못했습니다');}
  }catch(e){busy=false;netOk(false);render();msg('서버에 연결되지 않아 저장되지 않았습니다. 다시 눌러 주세요.');}
+}
+function repaintSel(){[...sel].forEach(k=>{const[a,b,c]=k.split('_').map(Number);sel.delete(k);paint(a,b,c);sel.add(k);});}
+function toggleSel(){
+ if(selMode){const old=[...sel];sel.clear();old.forEach(k=>{const[a,b,c]=k.split('_').map(Number);paint(a,b,c);});}
+ selMode=!selMode;bmsg='';$('selbtn').className='back'+(selMode?' on':'');$('selbtn').textContent=selMode?'선택 모드 끄기':'여러 칸 선택';updateBar();}
+function updateBar(){
+ const b=$('bar');if(!selMode){b.style.display='none';return;}
+ b.style.display='flex';
+ b.innerHTML=(bmsg?`<div class="bm">${esc(bmsg)}</div>`:'')+
+ `<button class="btn ok" ${sel.size&&!busy?'':'disabled'} onclick="bulkDone()">${sel.size?'선택한 '+sel.size+'칸 전부 완료':'완료할 칸을 눌러 선택하세요'}</button>`+
+ `<button class="btn sec" ${sel.size?'':'disabled'} onclick="clearSel()">선택 해제</button>`+
+ (lastBatch?`<button class="btn warn" ${busy?'disabled':''} onclick="bulkUndo()">방금 일괄 입력 취소</button>`:'');
+}
+function clearSel(){const old=[...sel];sel.clear();old.forEach(k=>{const[a,b,c]=k.split('_').map(Number);paint(a,b,c);});bmsg='';updateBar();}
+function applyCells(cells){cells.forEach(c=>{const ti=D.types.findIndex(T=>T.name===c.type);if(ti<0)return;const ri=D.types[ti].rows.findIndex(r=>r.box===c.box);if(ri<0)return;done[ti][ri][c.ci]=c.d;paint(ti,ri,c.ci);});prog();}
+async function bulkDone(){
+ if(!sel.size||busy)return;
+ const items=[...sel].map(k=>{const[a,b,c]=k.split('_').map(Number);return{type:D.types[a].name,box:D.types[a].rows[b].box,ci:c};});
+ busy=true;bmsg='';updateBar();
+ try{const res=await post({action:'bulk',po:PO,items});busy=false;
+  if(res.ok){applyCells(res.cells);clearSel();lastBatch=res.batch;bmsg=res.cells.length+'칸 완료했습니다';netOk(true);}
+  else{bmsg=res.msg||'저장하지 못했습니다';poll();}
+ }catch(e){busy=false;netOk(false);bmsg='서버에 연결되지 않아 저장되지 않았습니다. 다시 눌러 주세요.';}
+ updateBar();
+}
+async function bulkUndo(){
+ if(!lastBatch||busy)return;busy=true;updateBar();
+ try{const res=await post({action:'bulkundo',batch:lastBatch});busy=false;
+  if(res.ok){applyCells(res.cells);bmsg=res.cells.length+'칸을 되돌렸습니다';lastBatch=null;}else bmsg=res.msg||'되돌리지 못했습니다';
+ }catch(e){busy=false;bmsg='서버에 연결되지 않았습니다. 다시 눌러 주세요.';}
+ updateBar();
 }
 $('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeM();});
 document.documentElement.style.setProperty('--s','.5');
