@@ -148,7 +148,7 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <script>
 let API='__API_URL__';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiTest',q);API=localStorage.getItem('apiTest')||'';}catch(e){}}
-const APP_VER='0.4 TEST',APP_DATE='2026.11.24';
+const APP_VER='0.5 TEST',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -286,10 +286,10 @@ function clickWork(i){const w=SITE.work[i];
 // ---------- 포장 목록 ----------
 function renderPack(){
  const keep=$('wrap').scrollTop;let h='<div class="list">',lastP=null,any=false;
- const groups={};SITE.pack.forEach((b,i)=>{(groups[b.pyeong]=groups[b.pyeong]||[]).push(i);});
- Object.keys(groups).forEach(py=>{
+ const groups=new Map();SITE.pack.forEach((b,i)=>{if(!groups.has(b.pyeong))groups.set(b.pyeong,[]);groups.get(b.pyeong).push(i);});   // 박스번호 순서(첫 등장 순)대로
+ [...groups.keys()].forEach(py=>{
   if(pType!=='전체'&&pType!==py)return;
-  const ids=groups[py],dn=ids.filter(i=>pstat(i)==='done').length,all=dn===ids.length;
+  const ids=groups.get(py),dn=ids.filter(i=>pstat(i)==='done').length,all=dn===ids.length;
   const rows=ids.filter(i=>!pReady||pstat(i)==='ready'||pstat(i)==='part');
   h+=`<h3 class="grp ${all?'ok':''}">${esc(py)} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
