@@ -167,9 +167,9 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.3',APP_DATE='2026.11.24';
+const APP_VER='1.5',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
-const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);return p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;};   // '59A A-1' → 'A-1'
+const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);b=p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;return b.replace(/\sB\d{3}(\d{3})$/,'·$1');};   // '59A A-1' → 'A-1'
 const isNo=w=>/^No\./.test(w.model||'');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -196,7 +196,7 @@ async function showHome(){
  const bar=(a,t)=>`<div class="bar"><i style="width:${t?a/t*100:0}%"></i></div>`;
  const load=async()=>{try{const r=await get('action=sites');if(!r.ok)throw 0;if($('sver'))$('sver').textContent='서버 '+(r.ver||'1.2 이하 (Code.gs 새 버전 배포 필요)');
   if(!r.sites.length){$('list').innerHTML='<div class="hint">등록된 현장이 없습니다.</div>';return;}
-  $('list').innerHTML=r.sites.map(s=>{const k=s.stat;return `<button class="card" onclick="openSite('${esc(s.po)}')"><div class="po">PO ${esc(s.po)}</div><div class="nm">${esc(s.site)}</div>
+  $('list').innerHTML=r.sites.map(s=>{const k=s.stat;return `<button class="card" onclick="openSite('${esc(s.po)}')"><div class="po">PO ${esc(s.po)}${s.kind?` <span style="background:#e8edf4;color:#17345c;border-radius:6px;padding:1px 8px;margin-left:6px;font-size:13px;font-weight:800">${esc(s.kind)}</span>`:''}</div><div class="nm">${esc(s.site)}</div>
    <div class="st2">작업 ${k.work.f}/${k.work.t}줄 ${bar(k.work.f,k.work.t)}</div>
    <div class="st2">포장 ${k.pack.f}/${k.pack.t}박스 ${bar(k.pack.f,k.pack.t)}</div>
    <div class="st2">동별 ${k.dong.f}/${k.dong.t}칸 ${bar(k.dong.f,k.dong.t)}</div></button>`;}).join('');
