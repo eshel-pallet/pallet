@@ -167,10 +167,11 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.6',APP_DATE='2026.11.24';
+const APP_VER='1.7',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
-const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);b=p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;return b.replace(/\sB\d{3}(\d{3})$/,'·$1');};   // '59A A-1' → 'A-1'
-const labP=(b,p)=>lab(b,p).replace(/·\d+$/,'');   // 포장 카드에는 제품코드가 따로 보이므로 '·221' 꼬리는 뺌 (동별 표에서는 줄 구분용으로 유지)
+const bs0=b=>String(b==null?'':b).split('~')[0];   // 동별 두 번째 줄('#A3~2')도 포장 박스 '#A3' 로 연결
+const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);b=p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;return b.replace(/~\d+$/,'');};   // '59A A-1' → 'A-1'
+const labP=lab;
 const isNo=w=>/^No\./.test(w.model||'');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -225,7 +226,7 @@ async function loadSite(po){
 function indexAll(){
  wD=SITE.work.map(x=>x.d);pD=SITE.pack.map(x=>x.d);dD=SITE.dong.map(T=>T.rows.map(x=>x.d.slice()));
  wIdx={};SITE.work.forEach((w,i)=>wIdx[w.id]=i);pIdx={};SITE.pack.forEach((b,i)=>pIdx[b.box]=i);
- boxDong={};SITE.dong.forEach((T,ti)=>T.rows.forEach((r,ri)=>{(boxDong[r.box]=boxDong[r.box]||[]).push([ti,ri]);}));
+ boxDong={};SITE.dong.forEach((T,ti)=>T.rows.forEach((r,ri)=>{(boxDong[bs0(r.box)]=boxDong[bs0(r.box)]||[]).push([ti,ri]);}));
 }
 async function poll(){
  if(!SITE||busy)return;
@@ -257,7 +258,7 @@ function capOf(bi){   // 가공한 수량 기준으로 지금 더 포장할 수 
   const free=Math.floor((wD[wIdx[id]]-packed)/(l.per||1));cap=cap===null?free:Math.min(cap,free);}));
  return cap===null?null:Math.max(0,cap);}
 function pstat(bi){const b=SITE.pack[bi],e=Eof(bi);if(e>=b.n)return 'done';if(e>0)return 'part';if(!packable(bi))return 'wait';return capOf(bi)===0?'wait':'ready';}
-function boxStat(box){return box in pIdx?pstat(pIdx[box]):null;}
+function boxStat(box){box=bs0(box);return box in pIdx?pstat(pIdx[box]):null;}
 const LBL={wait:'작업 대기',ready:'포장 가능',part:'일부 포장',done:'포장 완료'};
 
 // ---------- 화면 전환 ----------
@@ -360,7 +361,7 @@ function buildDong(){
   while(i<cols.length){let j=i;while(j<cols.length&&cols[j].cha===cols[i].cha)j++;h+=`<th colspan="${j-i}" class="cha${esc(cols[i].cha)[0]}">${esc(cols[i].cha)}</th>`;i=j;}
   h+='</tr><tr>'+cols.map(c=>`<th class="cha${esc(c.cha)[0]}">${esc(c.dong)}</th>`).join('')+'</tr></thead><tbody>';}
   let lastBlk=null,bn=0;
-  T.rows.forEach((r,ri)=>{const pb=r.box in pIdx?SITE.pack[pIdx[r.box]]:null,blk=pb&&pb.lines[0]&&pb.lines[0].blk;
+  T.rows.forEach((r,ri)=>{const pb=bs0(r.box) in pIdx?SITE.pack[pIdx[bs0(r.box)]]:null,blk=pb&&pb.lines[0]&&pb.lines[0].blk;
    if(blk&&blk!==lastBlk){bn++;lastBlk=blk;h+=`<tr class="blkrow"><td colspan="${cols.length+1}">▼ 블록 ${bn} · 박스 세로 ${esc(blk)} (같은 파렛트 묶음)</td></tr>`;}
    h+=`<tr class="boxstart"><td class="c1" id="bx${ti}_${ri}">${esc(lab(r.box,T.name))}</td>`;
    r.q.forEach((q,ci)=>{h+=`<td class="cell" id="c${ti}_${ri}_${ci}" onclick="clickDong(${ti},${ri},${ci})"></td>`;});h+='</tr>';});
@@ -370,7 +371,7 @@ function buildDong(){
 }
 function paintDongAll(){SITE.dong.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>paintDong(ti,ri,ci))));paintBoxes();}
 function dongFree(ti,ri){   // 포장 연동 현장에서 이 박스를 지금 동별에 올릴 수 있는 수량 (null = 제한 없음)
- const r=SITE.dong[ti].rows[ri];if(!(r.box in pIdx))return null;const bi=pIdx[r.box],b=SITE.pack[bi];
+ const r=SITE.dong[ti].rows[ri];if(!(bs0(r.box) in pIdx))return null;const bi=pIdx[bs0(r.box)],b=SITE.pack[bi];
  if(!b.lines.some(l=>l.wks&&l.wks.length))return null;
  return both?Math.max(0,Math.min(b.n-Eof(bi),capOf(bi))):Math.max(0,Eof(bi)-Lof(bi));}
 function paintDong(ti,ri,ci){
