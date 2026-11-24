@@ -67,6 +67,8 @@ body.selmode .wrap{padding-bottom:170px}
 .pr .pm .ln span{color:#44546a;font-weight:600;font-size:calc(12px*var(--f))}
 .pr .pm .ln.ok::before{content:"✔ ";color:#2f9e44}
 .pr .pm .ln.no::before{content:"⏳ ";}
+.pr .tps{flex:0 0 auto;align-self:center;max-width:40%;text-align:right;font-size:calc(12px*var(--f));color:#44546a;font-weight:700;padding:6px 2px;line-height:1.5}.pr .tps small{color:var(--mute);font-weight:600}.tpm{display:none}
+@media(max-width:620px){.pr .tps{display:none}.tpm{display:inline}}
 .pr .pmeta{color:var(--mute);font-size:calc(12px*var(--f))}
 .pr .ps{flex:none;width:calc(104px*var(--f));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-left:1px solid var(--line);padding:4px}
 .st{font-weight:900;border-radius:12px;padding:1px 9px;font-size:calc(13px*var(--f))}
@@ -167,8 +169,11 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.7',APP_DATE='2026.11.24';
+const APP_VER='1.9',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
+const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
+const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};
+const tpBlk=b=>{const t=tpOf(b);return t?`<div class="tps">${t.map(x=>`${esc(x[0])} <small>${x[1]}</small>`).join('<br>')}</div>`:'';};
 const bs0=b=>String(b==null?'':b).split('~')[0];   // 동별 두 번째 줄('#A3~2')도 포장 박스 '#A3' 로 연결
 const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);b=p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;return b.replace(/~\d+$/,'');};   // '59A A-1' → 'A-1'
 const labP=lab;
@@ -295,7 +300,7 @@ function renderTools(){
   T.innerHTML=cats.map(c=>{const left=SITE.work.filter((w,i)=>(c==='전체'||w.cat===c)&&!wDone(SITE.work.indexOf(w))).length;return `<button class="${wCat===c?'on':''}" onclick="wCat='${c}';refresh()">${c} <small>${left}</small></button>`;}).join('')+
    `<button class="tg ${wLeft?'on':''}" onclick="wLeft=!wLeft;refresh()">남은 것만</button>`;
  }else if(mode==='pack'){
-  const py=['전체',...[...new Set(SITE.pack.map(b=>b.pyeong))]];
+  const keys=[...new Set(SITE.pack.map(b=>b.pyeong))],py=keys.length>1?['전체',...keys]:[];
   T.innerHTML=py.map(p=>{const ids=SITE.pack.map((b,i)=>[b,i]).filter(([b])=>p==='전체'||b.pyeong===p);const all=ids.length&&ids.every(([b,i])=>pstat(i)==='done');return `<button class="${pType===p?'on':''} ${all?'ok':''}" onclick="pType='${p}';refresh()">${p}${all?' ✔':''}</button>`;}).join('')+
    `<button class="tg ${pReady?'on':''}" onclick="pReady=!pReady;refresh()">포장 가능만</button>`;
  }else{
@@ -337,11 +342,11 @@ function renderPack(){
   if(pType!=='전체'&&pType!==py)return;
   const ids=groups.get(py),dn=ids.filter(i=>pstat(i)==='done').length,all=dn===ids.length;
   const rows=ids.filter(i=>!pReady||pstat(i)==='ready'||pstat(i)==='part');
-  h+=`<h3 class="grp ${all?'ok':''}">${esc(py)} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
+  h+=`<h3 class="grp ${all?'ok':''}">${py?esc(py):'포장 박스 (번호순)'} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
    h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(labP(b.box,b.pyeong))}</div>
-    <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${wprog(l)}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
-    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${(()=>{const c=capOf(i),rem=b.n-E;if(c===null||rem<=0)return '';return c<=0?`<div class="psm" style="color:#b3261e;font-weight:900">⚠ 가공 필요<br>포장 가능 0박스</div>`:`<div class="psm" style="color:#1d6b2f;font-weight:900;font-size:calc(15px*var(--f))">포장 가능<br>${Math.min(c,rem)}박스</div>`;})()}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
+    <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${wprog(l)}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개${tpTxt(b)?`<span class="tpm"> · 타입 ${tpTxt(b)}</span>`:''}</div></div>
+    ${tpBlk(b)}<div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${(()=>{const c=capOf(i),rem=b.n-E;if(c===null||rem<=0)return '';return c<=0?`<div class="psm" style="color:#b3261e;font-weight:900">⚠ 가공 필요<br>포장 가능 0박스</div>`:`<div class="psm" style="color:#1d6b2f;font-weight:900;font-size:calc(15px*var(--f))">포장 가능<br>${Math.min(c,rem)}박스</div>`;})()}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
  });
  h+=any?'':'<div class="empty">해당하는 박스가 없습니다</div>';
  $('wrap').innerHTML=h+'</div>';$('wrap').scrollTop=keep;
@@ -401,7 +406,7 @@ function ctxOf(c){
  if(c.k==='w'&&isNo(c.w=SITE.work[c.i])){const w=c.w;return {title:`작업 · 규격 ${esc(w.model)} · ${esc(w.name)}`,head:esc(w.model+' '+w.name),sub:`재단(가공 전) <b>${esc(w.edge)}</b><br>마감(가공 후) <b>${esc(w.vcut)}</b><br>${esc(w.proc)}${w.note?'<br>'+esc(w.note):''}`,q:w.q,d:wD[c.i],unit:'장',what:'가공한',body:{type:'작업',box:w.id,ci:0},extra:'',blocked:false,tail:'여기서 입력한 수량은 포장 화면의 해당 박스에 "가공 ○/○"로 자동 표시됩니다.'};}
  if(c.k==='w'){const w=SITE.work[c.i];return {title:'작업',head:esc(w.edge||w.model),sub:`${esc(w.name)}${w.vcut?'<br>V컷 '+esc(w.vcut):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
    extra:'',blocked:false,tail:w.codes?'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.':'이 품목은 포장리스트와 연결되지 않습니다 (작업 체크만).'};}
- if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · ${esc(b.pyeong)} 박스 ${esc(labP(b.box,b.pyeong))}`,head:esc(labP(b.box,b.pyeong)),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')+wprog(l)).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
+ if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · ${b.pyeong?esc(b.pyeong)+' ':''}박스 ${esc(labP(b.box,b.pyeong))}`,head:esc(labP(b.box,b.pyeong)),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')+wprog(l)).join('<br>')+(tpTxt(b)?'<br>타입 '+esc(tpTxt(b)):''),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
    extra:packExtra(c.i,can),blocked:!can,noAll:(()=>{const k=capOf(c.i);return k!==null&&k<b.n-Eof(c.i);})(),tail:''};}
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
  return {title:`${esc(T.name)} · ${esc(cl.dong)}${cl.cha?' · '+esc(cl.cha):''}`,head:esc(lab(r.box,T.name)),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
