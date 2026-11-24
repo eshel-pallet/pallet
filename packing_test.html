@@ -59,6 +59,7 @@ body.selmode .wrap{padding-bottom:170px}
 .pr.part .pb{background:var(--orange);color:#a24400}
 .pr.done .pb{background:var(--green);color:#1d6b2f}
 .pr .pm .ln{font-weight:800;font-size:calc(15px*var(--f));line-height:1.35}
+.pr .pm .ln .le{color:var(--navy);font-size:calc(17px*var(--f))}
 .pr .pm .ln span{color:#44546a;font-weight:600;font-size:calc(12px*var(--f))}
 .pr .pm .ln.ok::before{content:"✔ ";color:#2f9e44}
 .pr .pm .ln.no::before{content:"⏳ ";}
@@ -147,7 +148,7 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <script>
 let API='__API_URL__';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiTest',q);API=localStorage.getItem('apiTest')||'';}catch(e){}}
-const APP_VER='0.3 TEST',APP_DATE='2026.11.24';
+const APP_VER='0.4 TEST',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -293,7 +294,7 @@ function renderPack(){
   h+=`<h3 class="grp ${all?'ok':''}">${esc(py)} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
    h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(b.box)}</div>
-    <div class="pm">${b.lines.map(l=>{const ok=!l.work||(l.work in wIdx&&wDone(wIdx[l.work]));return `<div class="ln ${ok?'ok':'no'}">${esc(l.name)} <span>${esc(l.model)}</span></div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
+    <div class="pm">${b.lines.map(l=>{const ok=!l.work||(l.work in wIdx&&wDone(wIdx[l.work]));return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
     <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
  });
  h+=any?'':'<div class="empty">해당하는 박스가 없습니다</div>';
@@ -342,7 +343,7 @@ function clickDong(ti,ri,ci){
 function ctxOf(c){
  if(c.k==='w'){const w=SITE.work[c.i];return {title:'작업',head:esc(w.edge||w.model),sub:`${esc(w.name)}${w.vcut?'<br>V컷 '+esc(w.vcut):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
    extra:'',blocked:false,tail:w.codes?'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.':'이 품목은 포장리스트와 연결되지 않습니다 (작업 체크만).'};}
- if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · 박스 ${esc(b.box)} (${esc(b.pyeong)})`,head:esc(b.box),sub:b.lines.map(l=>esc(l.name)+' '+esc(l.model)).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
+ if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · 박스 ${esc(b.box)} (${esc(b.pyeong)})`,head:esc(b.box),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
    extra:can?'':'<div class="notice">⏳ 아직 작업(가공)이 끝나지 않은 품목이 있어 포장할 수 없습니다.</div>',blocked:!can,tail:''};}
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
  return {title:`${esc(T.name)} · ${esc(cl.dong)} · ${esc(cl.cha)}`,head:esc(r.box),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
