@@ -166,7 +166,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='1.1',APP_DATE='2026.11.24';
+const APP_VER='1.2',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const lab=(b,p)=>{b=String(b==null?'':b);p=String(p==null?'':p);return p&&b.indexOf(p+' ')===0?b.slice(p.length+1):b;};   // '59A A-1' → 'A-1'
 const isNo=w=>/^No\./.test(w.model||'');
