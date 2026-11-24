@@ -60,6 +60,10 @@ body.selmode .wrap{padding-bottom:170px}
 .pr.done .pb{background:var(--green);color:#1d6b2f}
 .pr .pm .ln{font-weight:800;font-size:calc(15px*var(--f));line-height:1.35}
 .pr .pm .ln .le{color:var(--navy);font-size:calc(17px*var(--f))}
+.pr .pm .ln .sh{font-style:normal;color:#b3261e;background:#ffe1de;border-radius:6px;padding:0 6px;font-size:calc(12px*var(--f));font-weight:900;white-space:nowrap}
+.adm{background:#b3261e;color:#fff;border-radius:6px;padding:2px 8px;font-weight:900;font-size:13px}
+.pin{display:flex;gap:6px;margin:6px 0}.pin input{flex:1;font-size:18px;padding:8px;border:2px solid #b3261e;border-radius:8px}
+.btn.adm2{background:#b3261e;color:#fff}
 .pr .pm .ln span{color:#44546a;font-weight:600;font-size:calc(12px*var(--f))}
 .pr .pm .ln.ok::before{content:"✔ ";color:#2f9e44}
 .pr .pm .ln.no::before{content:"⏳ ";}
@@ -132,7 +136,7 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <div id="home"></div>
 <header id="hd" style="display:none">
  <button class="hb" onclick="goHome()">◀ 현장 목록</button>
- <h1 id="ht"></h1><div class="sub" id="s"></div>
+ <h1 id="ht"></h1><span class="adm" id="admb" style="display:none">관리자</span><div class="sub" id="s"></div>
  <div class="chips"><span class="sub" id="prog"></span><span class="net" id="net">연결됨</span>
  <button class="hb" id="selbtn" onclick="toggleSel()">여러 칸 선택</button>
  <button class="hb both" id="bothbtn" onclick="toggleBoth()">포장+동별</button>
@@ -148,7 +152,7 @@ tr.boxstart td{border-top:2px solid #8c98a9}
 <script>
 let API='__API_URL__';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiTest',q);API=localStorage.getItem('apiTest')||'';}catch(e){}}
-const APP_VER='0.5 TEST',APP_DATE='2026.11.24';
+const APP_VER='0.7 TEST',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function get(q){const r=await fetch(API+'?'+q);return r.json();}
@@ -195,7 +199,7 @@ async function loadSite(po){
  $('wrap').innerHTML='<div class="empty">불러오는 중…</div>';
  try{const r=await get('action=site&po='+encodeURIComponent(po));
   if(!r.ok){$('wrap').innerHTML='<div class="empty" style="color:#b02a2a">'+esc(r.msg||'오류')+'</div>';return;}
-  SITE=r;indexAll();$('ht').textContent=r.site;$('s').textContent='PO '+r.po;
+  SITE=r;OVR=new Set(r.ovr||[]);$('admb').style.display=ADMIN?'inline-block':'none';indexAll();$('ht').textContent=r.site;$('s').textContent='PO '+r.po;
   if(!SITE.work.length&&SITE.pack.length)mode='pack';
   setMode(mode,true);netOk(true);timer=setInterval(poll,5000);
  }catch(e){$('wrap').innerHTML='<div class="empty" style="color:#b02a2a">서버에 연결할 수 없습니다.</div>';}
@@ -211,13 +215,21 @@ async function poll(){
   let ch=false;
   r.work.forEach((v,i)=>{if(wD[i]!==v){wD[i]=v;ch=true;}});
   r.pack.forEach((v,i)=>{if(pD[i]!==v){pD[i]=v;ch=true;}});
+  {const a=(r.ovr||[]).slice().sort().join('|'),b0=[...OVR].sort().join('|');if(a!==b0){OVR=new Set(r.ovr||[]);ch=true;}}
   r.dong.forEach((T,ti)=>T.rows.forEach((x,ri)=>x.d.forEach((v,ci)=>{if(dD[ti][ri][ci]!==v){dD[ti][ri][ci]=v;ch=true;}})));
   if(ch){pruneSel();refresh();if(cur)renderModal();}
  }catch(e){netOk(false);}
 }
 // ---------- 연동 계산 ----------
 const wDone=i=>wD[i]>=SITE.work[i].q;
-function packable(bi){return SITE.pack[bi].lines.every(l=>!l.work||(l.work in wIdx&&wDone(wIdx[l.work])));}
+const ADMIN=/[?&]admin(=|&|#|$)/.test(location.search+location.hash);
+let OVR=new Set();
+const allow=q=>Math.floor(q*((SITE&&SITE.short)||12)/100);          // 총수량 q 에서 모자라도 되는 개수 (12%)
+const wOK=i=>wD[i]>=SITE.work[i].q-allow(SITE.work[i].q);           // 작업이 '포장 가능' 수준까지 됐는가
+const lineOK=l=>!l.work||(l.work in wIdx&&wOK(wIdx[l.work]));
+const lineShort=l=>{if(!l.work||!(l.work in wIdx))return 0;const i=wIdx[l.work];return Math.max(0,SITE.work[i].q-wD[i]);};
+function packable(bi){const b=SITE.pack[bi];return OVR.has(b.box)||b.lines.every(lineOK);}
+function shortOf(bi){return SITE.pack[bi].lines.reduce((m,l)=>Math.max(m,lineShort(l)),0);}
 function Lof(bi){let s=0;(boxDong[SITE.pack[bi].box]||[]).forEach(([ti,ri])=>dD[ti][ri].forEach(v=>s+=v));return s;}
 function Eof(bi){return pD[bi];}
 function pstat(bi){const b=SITE.pack[bi],e=Eof(bi);if(e>=b.n)return 'done';if(e>0)return 'part';return packable(bi)?'ready':'wait';}
@@ -294,8 +306,8 @@ function renderPack(){
   h+=`<h3 class="grp ${all?'ok':''}">${esc(py)} — 포장 완료 ${dn}/${ids.length}박스${all?' ✔ 동별 시작 가능':''}</h3>`;
   rows.forEach(i=>{any=true;const b=SITE.pack[i],s=pstat(i),E=Eof(i),Lx=Lof(i);
    h+=`<div class="pr ${s} ${sel.has('p:'+b.box)?'sel':''}" onclick="clickPack(${i})"><div class="pb">${esc(b.box)}</div>
-    <div class="pm">${b.lines.map(l=>{const ok=!l.work||(l.work in wIdx&&wDone(wIdx[l.work]));return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
-    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
+    <div class="pm">${b.lines.map(l=>{const ok=lineOK(l)||OVR.has(b.box),sh=lineShort(l);return `<div class="ln ${ok?'ok':'no'}"><b class="le">${esc(l.edge||l.model)}</b> ${esc(l.name)}${l.vcut?` <span>V컷 ${esc(l.vcut)}</span>`:''}${sh>0&&ok?` <i class="sh">⚠ 작업 부족 −${sh}</i>`:''}</div>`;}).join('')}<div class="pmeta">박스 ${b.n}개</div></div>
+    <div class="ps"><span class="st ${s}">${LBL[s]}</span><div class="pcnt">${E}/${b.n}</div>${s!=='done'&&packable(i)&&shortOf(i)>0?`<div class="psm" style="color:#b3261e;font-weight:900">부족 −${shortOf(i)}</div>`:''}${Lx>0?`<div class="psm">동별 올림 ${Lx}</div>`:''}</div></div>`;});
  });
  h+=any?'':'<div class="empty">해당하는 박스가 없습니다</div>';
  $('wrap').innerHTML=h+'</div>';$('wrap').scrollTop=keep;
@@ -344,16 +356,37 @@ function ctxOf(c){
  if(c.k==='w'){const w=SITE.work[c.i];return {title:'작업',head:esc(w.edge||w.model),sub:`${esc(w.name)}${w.vcut?'<br>V컷 '+esc(w.vcut):''}`,q:w.q,d:wD[c.i],unit:'개',what:'만든',body:{type:'작업',box:w.id,ci:0},
    extra:'',blocked:false,tail:w.codes?'작업이 모두 끝나면 이 부재가 들어가는 포장 박스가 "포장 가능"으로 바뀝니다.':'이 품목은 포장리스트와 연결되지 않습니다 (작업 체크만).'};}
  if(c.k==='p'){const b=SITE.pack[c.i],can=packable(c.i);return {title:`포장 · 박스 ${esc(b.box)} (${esc(b.pyeong)})`,head:esc(b.box),sub:b.lines.map(l=>'<b>'+esc(l.edge||l.model)+'</b> '+esc(l.name)+(l.vcut?' · V컷 '+esc(l.vcut):'')).join('<br>'),q:b.n,d:Eof(c.i),unit:'박스',what:'포장한',body:{type:'포장',box:b.box,ci:0},
-   extra:can?'':'<div class="notice">⏳ 아직 작업(가공)이 끝나지 않은 품목이 있어 포장할 수 없습니다.</div>',blocked:!can,tail:''};}
+   extra:packExtra(c.i,can),blocked:!can,tail:''};}
  const T=SITE.dong[c.ti],r=T.rows[c.ri],cl=T.cols[c.ci];const bs=boxStat(r.box);
  return {title:`${esc(T.name)} · ${esc(cl.dong)} · ${esc(cl.cha)}`,head:esc(r.box),sub:'',q:r.q[c.ci],d:dD[c.ti][c.ri][c.ci],unit:'개',what:'올린',body:{type:T.name,box:r.box,ci:c.ci},
   both:true,
   extra:(both?'<div class="bnote">⚡ 포장+동별 모드: 올린 만큼 포장 수량에도 같이 들어갑니다.</div>':'')+(bs&&bs!=='done'&&bs!=='part'&&bs!=='ready'?'<div class="notice">⏳ 이 박스는 아직 작업(가공)이 끝나지 않았습니다.</div>':''),blocked:false,tail:''};
 }
-function openModal(c){cur=c;renderModal();$('modal').style.display='flex';}
+function packExtra(bi,can){
+ const b=SITE.pack[bi];let h='';
+ const short=b.lines.filter(l=>lineShort(l)>0).map(l=>`<div>· <b>${esc(l.edge||l.model)}</b> ${esc(l.name)} — 작업 ${wD[wIdx[l.work]]}/${SITE.work[wIdx[l.work]].q} (부족 −${lineShort(l)})</div>`).join('');
+ if(OVR.has(b.box))h+='<div class="bnote">🔓 관리자 예외 승인됨 — 작업이 덜 끝났어도 포장할 수 있습니다.</div>';
+ else if(!can)h+=`<div class="notice">⏳ 작업이 더 필요합니다. (모자란 수량이 총수량의 ${(SITE&&SITE.short)||12}% 이내여야 포장 가능)</div>`;
+ else if(short)h+='<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 일부 작업이 덜 됐지만 포장은 가능합니다.</div>';
+ if(short)h+=`<div class="info" style="font-size:14px">${short}</div>`;
+ if(ADMIN){
+  if(OVR.has(b.box))h+=`<div class="pin"><input id="pin" type="password" inputmode="numeric" placeholder="관리자 번호"><button class="btn adm2" onclick="setOvr('${esc(b.box)}',false)">예외 해제</button></div>`;
+  else if(!can)h+=`<div class="pin"><input id="pin" type="password" inputmode="numeric" placeholder="관리자 번호"><button class="btn adm2" onclick="setOvr('${esc(b.box)}',true)">예외 승인 (포장 시작 허용)</button></div>`;
+ }
+ return h;
+}
+async function setOvr(box,on){
+ const pin=$('pin')?$('pin').value:'';if(!pin){msg('관리자 번호를 입력해 주세요');return;}
+ if(busy)return;busy=true;
+ try{const res=await post({action:'ovr',po:PO,box,on,pin});busy=false;
+  if(res.ok){OVR=new Set(res.ovr||[]);toast(on?'예외 승인했습니다':'예외를 해제했습니다',3000);closeM();refresh();}
+  else msg(res.msg||'처리하지 못했습니다');
+ }catch(e){busy=false;msg('서버에 연결되지 않았습니다. 다시 눌러 주세요.');}
+}
+function openModal(c){cur=c;$('mb').innerHTML='';renderModal();$('modal').style.display='flex';}
 function renderModal(){
  if(!cur)return;const x=ctxOf(cur),q=x.q,d=x.d,left=q-d;
- const keep=$('n')?$('n').value:'',keepM=$('m')?$('m').textContent:'';
+ const keep=$('n')?$('n').value:'',keepM=$('m')?$('m').textContent:'',keepP=$('pin')?$('pin').value:'';
  $('mb').innerHTML=`<h2>${x.title}</h2><div class="info" style="font-size:30px;font-weight:900;color:var(--navy)">${x.head}</div>${x.sub?`<div class="info">${x.sub}</div>`:''}${x.extra}
  <div class="big">전체 <b>${q}</b>${x.unit} · 지금까지 <b>${d}</b> · <b style="color:#c0392b">남은 ${left}</b></div>
  <button class="btn ok" ${left===0||busy||x.blocked?'disabled':''} onclick="act('add',${left})">전부 완료 (남은 ${left}${x.unit})</button>
@@ -364,8 +397,9 @@ function renderModal(){
  <div class="lbl">수량 직접 수정 — 지금까지 ${x.what} 개수</div>
  <div class="row"><input id="e" type="number" inputmode="numeric" min="0" max="${q}" value="${d}"><button class="btn sec" ${busy||x.blocked||(both&&x.both)?'disabled':''} onclick="act('set',parseInt($('e').value))">저장</button></div>
  <button class="btn sec" onclick="closeM()">닫기</button>`;
+ if($('pin')&&keepP)$('pin').value=keepP;
 }
-function closeM(){$('modal').style.display='none';cur=null;}
+function closeM(){$('modal').style.display='none';cur=null;$('mb').innerHTML='';}
 function msg(t){const m=$('m');if(m)m.textContent=t;}
 function setRaw(c,v){if(c.k==='w')wD[c.i]=v;else if(c.k==='p')pD[c.i]=v;else dD[c.ti][c.ri][c.ci]=v;}
 async function act(kind,v){
