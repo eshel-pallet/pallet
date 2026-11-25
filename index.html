@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#16202a">
+<link rel="icon" type="image/png" sizes="32x32" href="pallet-icon-32.png">
+<link rel="apple-touch-icon" href="pallet-apple-icon-180.png">
+<link rel="manifest" href="pallet.webmanifest">
+<meta name="apple-mobile-web-app-title" content="QR포장출고">
 <title>파렛트 스캔</title>
 <style>
 :root{--bg:#16202a;--card:#1f2d3a;--line:#33475a;--tx:#f2f6fa;--sub:#9fb2c4;--ok:#1fb874;--warn:#f5a524;--bad:#ef5350;--pri:#3b82f6}
@@ -218,7 +222,7 @@ details{margin-top:10px}summary{color:var(--sub);font-size:15px;padding:6px 0}
 <script>
 "use strict";
 const API = "https://script.google.com/macros/s/AKfycbzG5zBEqGenvl0y2aaXL1hvMPBDENRQwCbYi6Y4LwnFS9R8Jl22zl4NM5JfOw6m9t42/exec";
-const APP_VER = "1.5", APP_DATE = "2026.11.13";
+const APP_VER = "1.6", APP_DATE = "2026.11.26";
 const TYPES = ["철","작은나무","큰나무","폭좁은나무","기타"];
 const KEY_RE = /^\d{2}-\d{4}-\d{4}-\d{2}\|\d+(-\d+)?$/;
 const $ = id => document.getElementById(id);
