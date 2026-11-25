@@ -2,6 +2,11 @@
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>에셀 생산 체크리스트</title>
+<link rel="icon" type="image/png" sizes="32x32" href="checklist-icon-32.png">
+<link rel="apple-touch-icon" href="checklist-apple-icon-180.png">
+<link rel="manifest" href="checklist.webmanifest">
+<meta name="apple-mobile-web-app-title" content="체크리스트">
+<meta name="theme-color" content="#1f3a5f">
 <style>
 :root{--s:.5;--f:1;--navy:#1f3a5f;--line:#c9d1db;--yellow:#ffe94d;--orange:#ffd8a8;--green:#b9f0c4;--blue:#cfe3ff;--ink:#14213d;--mute:#7a8699}
 *{box-sizing:border-box}
@@ -181,7 +186,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='2.3',APP_DATE='2026.11.24';
+const APP_VER='2.4',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
 const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};

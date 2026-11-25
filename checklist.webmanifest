@@ -1,0 +1,12 @@
+{
+  "name": "에셀 생산 체크리스트",
+  "short_name": "체크리스트",
+  "start_url": "checklist.html",
+  "display": "browser",
+  "background_color": "#14284a",
+  "theme_color": "#1f3a5f",
+  "icons": [
+    { "src": "checklist-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "checklist-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
