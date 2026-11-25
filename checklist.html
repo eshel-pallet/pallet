@@ -181,7 +181,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='2.2',APP_DATE='2026.11.24';
+const APP_VER='2.3',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
 const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};
@@ -279,10 +279,11 @@ function packable(bi){const b=SITE.pack[bi];return OVR.has(b.box)||b.lines.every
 function shortOf(bi){return SITE.pack[bi].lines.reduce((m,l)=>Math.max(m,lineShort(l)),0);}
 function Lof(bi){let s=0;(boxDong[SITE.pack[bi].box]||[]).forEach(([ti,ri])=>dD[ti][ri].forEach(v=>s+=v));return s;}
 function Eof(bi){return pD[bi];}
-function capOf(bi){   // 가공한 수량 기준으로 지금 더 포장할 수 있는 박스 수 (가공 연결이 없는 현장은 null = 제한 없음)
- const b=SITE.pack[bi];let cap=null;
- b.lines.forEach(l=>(l.wks||[]).forEach(id=>{if(!(id in wIdx))return;
-  let packed=0;SITE.pack.forEach((bb,j)=>bb.lines.forEach(ll=>{if((ll.wks||[]).indexOf(id)>=0)packed+=pD[j]*(ll.per||1);}));
+const wksOf=l=>l.wks||(l.work?[String(l.work)]:[]);   // 가공 연결: 손잡이·유리도어는 wks, 선출고는 work
+function capOf(bi){   // 작업(가공)한 수량 기준으로 지금 더 포장할 수 있는 박스 수 (연결 없음·관리자 예외 = null = 제한 없음)
+ const b=SITE.pack[bi];let cap=null;if(OVR.has(b.box))return null;
+ b.lines.forEach(l=>wksOf(l).forEach(id=>{if(!(id in wIdx))return;
+  let packed=0;SITE.pack.forEach((bb,j)=>{if(OVR.has(bb.box))return;bb.lines.forEach(ll=>{if(wksOf(ll).indexOf(id)>=0)packed+=pD[j]*(ll.per||1);});});
   const free=Math.floor((wD[wIdx[id]]-packed)/(l.per||1));cap=cap===null?free:Math.min(cap,free);}));
  return cap===null?null:Math.max(0,cap);}
 function pstat(bi){const b=SITE.pack[bi],e=Eof(bi);if(e>=b.n)return 'done';if(e>0)return 'part';if(!packable(bi))return 'wait';return capOf(bi)===0?'wait':'ready';}
@@ -440,11 +441,11 @@ function ctxOf(c){
 }
 function packExtra(bi,can){
  const b=SITE.pack[bi];let h='';
- {const c=capOf(bi),rem=b.n-Eof(bi);if(c!==null&&rem>0&&c<rem)h+=`<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 가공한 수량이 모자라 지금은 <b>${c}박스</b>까지만 포장할 수 있습니다. (가공보다 많이 포장하면 저장되지 않습니다)</div>`;}
+ let capLim=false;{const c=capOf(bi),rem=b.n-Eof(bi);if(c!==null&&rem>0&&c<rem){capLim=true;h+=`<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 작업(가공)한 수량이 모자라 지금은 <b>${c}박스</b>까지만 포장할 수 있습니다. 나머지는 모자란 작업이 들어와야 포장됩니다.</div>`;}}
  const short=b.lines.filter(l=>lineShort(l)>0).map(l=>`<div>· <b>${esc(l.edge||l.model)}</b> ${esc(l.name)} — 작업 ${wD[wIdx[l.work]]}/${SITE.work[wIdx[l.work]].q} (부족 −${lineShort(l)})</div>`).join('');
  if(OVR.has(b.box))h+='<div class="bnote">🔓 관리자 예외 승인됨 — 작업이 덜 끝났어도 포장할 수 있습니다.</div>';
  else if(!can)h+=`<div class="notice">⏳ 작업이 더 필요합니다. (모자란 수량이 총수량의 ${(SITE&&SITE.short)||12}% 이내여야 포장 가능)</div>`;
- else if(short)h+='<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 일부 작업이 덜 됐지만 포장은 가능합니다.</div>';
+ else if(short&&!capLim)h+='<div class="bnote" style="background:#ffe9e6;border-color:#b3261e;color:#8c1d18">⚠ 일부 작업이 덜 됐지만 포장은 가능합니다.</div>';
  if(short)h+=`<div class="info" style="font-size:14px">${short}</div>`;
  if(ADMIN){
   if(OVR.has(b.box))h+=`<div class="pin"><input id="pin" type="password" inputmode="numeric" placeholder="관리자 번호"><button class="btn adm2" onclick="setOvr('${esc(b.box)}',false)">예외 해제</button></div>`;
