@@ -186,7 +186,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='2.4',APP_DATE='2026.11.24';
+const APP_VER='2.5',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
 const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};
@@ -326,7 +326,7 @@ function renderProg(){
 function renderTools(){
  const T=$('tools');
  if(mode==='work'){
-  const cats=['전체',...[...new Set(SITE.work.map(w=>w.cat))]];
+  const uc=[...new Set(SITE.work.map(w=>w.cat))],cats=uc.length>1?['전체',...uc]:['전체'];   // 구분이 하나뿐이면(유리도어·픽스판넬 등) [전체]만
   T.innerHTML=cats.map(c=>{const left=SITE.work.filter((w,i)=>(c==='전체'||w.cat===c)&&!wDone(SITE.work.indexOf(w))).length;return `<button class="${wCat===c?'on':''}" onclick="wCat='${c}';refresh()">${c} <small>${left}</small></button>`;}).join('')+
    `<button class="tg ${wLeft?'on':''}" onclick="wLeft=!wLeft;refresh()">남은 것만</button>`;
  }else if(mode==='pack'){
