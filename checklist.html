@@ -181,7 +181,7 @@ tr.blkrow td{background:#17345c;color:#fff;font-weight:800;text-align:left;paddi
 <script>
 let API='https://script.google.com/macros/s/AKfycbwehhEsRDOCmftOCrgg1Wn5rnJLZPfqE9jg8U3gpnAowb8rMPoWwPs5eNj4QnV58CsI3A/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiMain',q);API=localStorage.getItem('apiMain')||'';}catch(e){}}
-const APP_VER='2.1',APP_DATE='2026.11.24';
+const APP_VER='2.2',APP_DATE='2026.11.24';
 const $=id=>document.getElementById(id);
 const tpOf=b=>{const l=b.lines&&b.lines[0];return l&&l.tp&&l.tp.length?l.tp:null;};
 const tpTxt=b=>{const t=tpOf(b);return t?t.map(x=>x[0]+' '+x[1]).join(' · '):'';};
@@ -401,8 +401,9 @@ function buildDong(){
 function paintDongAll(){SITE.dong.forEach((T,ti)=>T.rows.forEach((r,ri)=>r.q.forEach((q,ci)=>paintDong(ti,ri,ci))));paintBoxes();}
 function dongFree(ti,ri){   // 포장 연동 현장에서 이 박스를 지금 동별에 올릴 수 있는 수량 (null = 제한 없음)
  const r=SITE.dong[ti].rows[ri];if(!(bs0(r.box) in pIdx))return null;const bi=pIdx[bs0(r.box)],b=SITE.pack[bi];
- if(!b.lines.some(l=>l.wks&&l.wks.length))return null;
- return both?Math.max(0,Math.min(b.n-Eof(bi),capOf(bi))):Math.max(0,Eof(bi)-Lof(bi));}
+ // 모든 현장(선출고 포함): 동별은 포장한 수량까지만. 포장+동별 모드는 포장 가능한 만큼까지
+ if(both){if(!packable(bi))return 0;const c=capOf(bi);return Math.max(0,Math.min(b.n-Eof(bi),c===null?Infinity:c));}
+ return Math.max(0,Eof(bi)-Lof(bi));}
 function paintDong(ti,ri,ci){
  const q=SITE.dong[ti].rows[ri].q[ci],d=dD[ti][ri][ci],td=$(`c${ti}_${ri}_${ci}`);if(!td)return;
  if(q===0){td.className='cell zero';td.innerHTML='<div class="main">-</div>';return;}
