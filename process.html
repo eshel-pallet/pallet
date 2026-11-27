@@ -111,9 +111,9 @@ body.selmode .wrap{padding-bottom:170px}
 <div id="modal"><div class="box" id="mb"></div></div>
 <div id="print"></div>
 <script>
-let API='__API__';
+let API='https://script.google.com/macros/s/AKfycbxCtTMU3C58wF6QQbILjJMajkcL6zbzhJKoIuog2W8oySj4hICMejmE73J92B1BaUN7tQ/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiUp',q);API=localStorage.getItem('apiUp')||'';}catch(e){}}
-const APP_VER='0.1',APP_DATE='2026.11.27';
+const APP_VER='0.2',APP_DATE='2026.11.27';
 const MC=[['#1D9E75','#0F6E56'],['#BA7517','#854F0B'],['#534AB7','#3C3489'],['#D4537E','#993556'],['#378ADD','#185FA5'],['#639922','#3B6D11']];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
