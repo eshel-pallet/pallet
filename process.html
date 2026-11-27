@@ -88,6 +88,7 @@ body.selmode .wrap{padding-bottom:170px}
 .tag .e{font-size:30pt;font-weight:900;letter-spacing:.5px}
 .tag .no{text-align:center;margin-top:9mm;font-size:30pt;font-weight:900}
 .tag .nm{font-size:12.5pt}
+.tag .test{text-align:center;margin-top:6mm;font-size:12pt;border:1.2px dashed #000;padding:2mm}
 @media print{
  @page{size:A5 portrait;margin:0}
  body,body.home{display:block;height:auto;overflow:visible;background:#fff}
@@ -113,7 +114,7 @@ body.selmode .wrap{padding-bottom:170px}
 <script>
 let API='https://script.google.com/macros/s/AKfycbxCtTMU3C58wF6QQbILjJMajkcL6zbzhJKoIuog2W8oySj4hICMejmE73J92B1BaUN7tQ/exec';
 if(API.indexOf('__API')===0){API='';try{const q=new URLSearchParams(location.search).get('api');if(q)localStorage.setItem('apiUp',q);API=localStorage.getItem('apiUp')||'';}catch(e){}}
-const APP_VER='0.2',APP_DATE='2026.11.27';
+const APP_VER='0.3',APP_DATE='2026.11.27';
 const MC=[['#1D9E75','#0F6E56'],['#BA7517','#854F0B'],['#534AB7','#3C3489'],['#D4537E','#993556'],['#378ADD','#185FA5'],['#639922','#3B6D11']];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -173,7 +174,7 @@ function renderTools(){
  const mats=Object.keys(matIdx);
  $('tools').innerHTML=`<button class="${onlyLeft?'':'on'}" onclick="onlyLeft=false;refresh()">전체</button><button class="${onlyLeft?'on':''}" onclick="onlyLeft=true;refresh()">남은 것만</button>`+
   mats.map(m=>`<span class="lg"><i style="background:${MC[matIdx[m]%MC.length][0]}"></i>${esc(m)}</span>`).join('')+
-  (proc==='재단'?`<button class="tagb ${tagOn()?'on':''}" onclick="ls('tagOn',tagOn()?'0':'1');refresh()">A5 태그 인쇄 ${tagOn()?'켜짐':'꺼짐'}</button>`:'');
+  (proc==='재단'?`<button class="tagb" onclick="sampleTag()">태그 시험 인쇄</button><button class="${tagOn()?'on':''}" onclick="ls('tagOn',tagOn()?'0':'1');refresh()">A5 태그 인쇄 ${tagOn()?'켜짐':'꺼짐'}</button>`:'');
 }
 function rowHtml(p){
  const d=dOf(proc,p),q=p.q,done=d>=q,part=!done&&d>0,c=MC[matIdx[p.mat]%MC.length];
@@ -258,7 +259,7 @@ async function bulkUndo(){
 }
 
 // ---------- A5 태그 ----------
-function tagHtml(p,n){
+function tagHtml(p,n,test){
  return `<div class="tag"><table>
  <tr><td colspan="2" class="top">${esc(SITE.item)}</td></tr>
  <tr><td class="h">P O</td><td>${esc(SITE.po)}</td></tr>
@@ -267,8 +268,9 @@ function tagHtml(p,n){
  <tr><td colspan="2">${esc(SITE.cls)}</td></tr>
  <tr><td class="h">사이즈</td><td class="e">${p.l} X ${p.w}</td></tr>
  <tr><td class="h">수량</td><td><span class="e">${n}</span> 개</td></tr>
- </table><div class="no">${esc(p.no)}</div></div>`;
+ </table><div class="no">${esc(p.no)}</div>${test?'<div class="test">시험 인쇄 — 실적에 들어가지 않은 태그입니다</div>':''}</div>`;
 }
+function sampleTag(){const p=partsOf('재단')[0];if(!p)return;$('print').innerHTML=tagHtml(p,p.q,true);setTimeout(()=>window.print(),50);}
 function printTags(list){
  list=list.filter(x=>x.p&&x.n>0);if(!list.length)return;
  $('print').innerHTML=list.map(x=>tagHtml(x.p,x.n)).join('');
